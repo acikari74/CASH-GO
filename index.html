@@ -93,6 +93,9 @@
   .sum-val{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums;}
 
   .tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;}
+  .hist-date-filter{display:flex;gap:8px;margin-bottom:14px;}
+  .hist-date-filter input[type=date]{flex:1;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-size:13px;color:var(--ink);font-family:'Inter',sans-serif;}
+  .hist-date-clear{flex:0 0 auto;padding:0 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-size:12px;font-weight:700;color:var(--ink-soft);cursor:pointer;}
   .tab{flex:0 0 auto;padding:8px 15px;border-radius:20px;border:1px solid var(--border);background:var(--card);font-size:12.5px;font-weight:700;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
   .tab.active{background:var(--dark);border-color:var(--dark);color:#fff;}
 
@@ -297,6 +300,10 @@
     <div class="summary-grid" id="summaryGrid"></div>
     <div id="driverPerfWrap"></div>
     <div class="tabs" id="tabs"></div>
+    <div class="hist-date-filter hidden" id="histDateFilter">
+      <input type="date" id="histDateInput" onchange="onHistDateChange()">
+      <button type="button" class="hist-date-clear" onclick="clearHistDate()">Semua Tanggal</button>
+    </div>
     <div id="orderList"></div>
   </div>
 
@@ -338,6 +345,22 @@
 
       <button class="save-btn" onclick="saveOrder()">Buat Pesanan</button>
       <div class="cancel-link" onclick="closeSheet()">Batal</div>
+    </div>
+  </div>
+
+  <!-- Complete order sheet -->
+  <div class="sheet-backdrop" id="completeSheetBackdrop" onclick="closeOnCompleteBackdrop(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">✓ Selesaikan Pesanan</div>
+      <div class="track-card" id="completeSummary" style="margin-bottom:16px;"></div>
+      <div class="field">
+        <label>Nominal Final (Rp)</label>
+        <input type="text" id="inpNominalFinal" placeholder="0" inputmode="numeric" oninput="formatNominalInput(this)">
+        <div class="hint">Isi sesuai jumlah yang benar-benar diserahkan/ditarik di lapangan.</div>
+      </div>
+      <button class="save-btn" style="background:var(--green);color:#04150a;" onclick="confirmCompleteOrder()">✓ Konfirmasi Selesai</button>
+      <div class="cancel-link" onclick="closeCompleteSheet()">Batal</div>
     </div>
   </div>
 
@@ -458,6 +481,7 @@ let loginRole = 'owner';
 
 let currentJenis = 'antar';
 let activeTab = 'semua';
+let driverHistoryDate = '';
 let pickedStore = null;
 let pickedStoreGeo = null;
 let watchId = null;
@@ -945,14 +969,26 @@ function getTabsForRole(){
   if(session.role === 'driver') return [{id:'tersedia',label:'Tersedia'},{id:'punya-saya',label:'Pesanan Saya'},{id:'riwayat',label:'Riwayat'}];
   return [{id:'semua',label:'Semua'},{id:'baru',label:'Baru'},{id:'proses',label:'Diproses'},{id:'selesai',label:'Selesai'}];
 }
-function switchTab(id){ activeTab = id; render(); }
+function switchTab(id){
+  activeTab = id;
+  if(id !== 'riwayat'){ driverHistoryDate = ''; const di=document.getElementById('histDateInput'); if(di) di.value=''; }
+  render();
+}
+function onHistDateChange(){ driverHistoryDate = document.getElementById('histDateInput').value; render(); }
+function clearHistDate(){ driverHistoryDate = ''; document.getElementById('histDateInput').value = ''; render(); }
+function matchesHistDate(o){
+  if(!driverHistoryDate) return true;
+  const ref = new Date(o.tsCompleted || o.tsUpdate || o.ts);
+  const y = ref.getFullYear(), m = String(ref.getMonth()+1).padStart(2,'0'), d = String(ref.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}` === driverHistoryDate;
+}
 
 function filteredOrders(){
   const all = [...store.orders].sort((a,b)=> b.ts - a.ts);
   const nama = (session.nama||'').trim().toLowerCase();
   if(session.role === 'driver'){
     if(activeTab === 'punya-saya') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='ditugaskan'||o.status==='diproses'));
-    if(activeTab === 'riwayat') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='selesai'||o.status==='batal'));
+    if(activeTab === 'riwayat') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='selesai'||o.status==='batal')).filter(matchesHistDate);
     return all.filter(o => o.status === 'baru' && !o.driver); // default: 'tersedia'
   }
   if(activeTab === 'baru') return all.filter(o=>o.status==='baru');
@@ -1077,7 +1113,7 @@ function orderActions(o){
   if(session.role === 'driver'){
     if(o.status === 'baru' && !o.driver) actions += `<button class="act-btn primary" onclick="claimOrder('${o.id}')">Ambil Pesanan</button>`;
     else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">Mulai Jalan</button>`;
-    else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='diproses') actions += `<button class="act-btn success" onclick="completeOrder('${o.id}')">Selesaikan</button>`;
+    else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='diproses') actions += `<button class="act-btn success" onclick="openCompleteSheet('${o.id}')">Selesaikan</button>`;
     return actions ? `<div class="order-actions">${actions}</div>` : '';
   }
 
@@ -1095,9 +1131,15 @@ function render(){
   renderSummary();
   renderDriverPerf();
   renderTabs();
+  const dateFilterEl = document.getElementById('histDateFilter');
+  if(dateFilterEl) dateFilterEl.classList.toggle('hidden', !(session.role==='driver' && activeTab==='riwayat'));
   const list = filteredOrders();
   const wrap = document.getElementById('orderList');
-  if(list.length === 0){ wrap.innerHTML = `<div class="empty-state"><span class="big">📦</span>Belum ada pesanan di sini.</div>`; return; }
+  if(list.length === 0){
+    const msg = (session.role==='driver' && activeTab==='riwayat' && driverHistoryDate) ? 'Tidak ada riwayat di tanggal ini.' : 'Belum ada pesanan di sini.';
+    wrap.innerHTML = `<div class="empty-state"><span class="big">📦</span>${msg}</div>`;
+    return;
+  }
   wrap.innerHTML = list.map(o => {
     const d = new Date(o.ts);
     const timeStr = d.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
@@ -1163,16 +1205,32 @@ async function startOrder(orderId){
   if(trackingOrderId===orderId) renderTracking(orderId, true);
   showToast('Pesanan dalam perjalanan');
 }
-async function completeOrder(orderId){
+let completingOrderId = null;
+function openCompleteSheet(orderId){
   const o = store.orders.find(x=>x.id===orderId); if(!o) return;
-  const input = prompt('Nominal final yang diserahkan/ditarik (Rp):', o.nominal);
-  if(input === null) return;
-  const val = parseInt(input.replace(/\D/g,'')) || o.nominal;
+  completingOrderId = orderId;
+  document.getElementById('completeSummary').innerHTML = `
+    <div class="track-info-row"><span class="k">Jenis</span><span class="v">${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</span></div>
+    <div class="track-info-row"><span class="k">Toko</span><span class="v">${escapeHtml(o.tujuan)}</span></div>
+    <div class="track-info-row"><span class="k">Nominal Pesanan</span><span class="v">${fmtRp(o.nominal)}</span></div>
+  `;
+  const inp = document.getElementById('inpNominalFinal');
+  inp.value = o.nominal.toLocaleString('id-ID');
+  document.getElementById('completeSheetBackdrop').classList.add('open');
+}
+function closeCompleteSheet(){ document.getElementById('completeSheetBackdrop').classList.remove('open'); completingOrderId = null; }
+function closeOnCompleteBackdrop(e){ if(e.target.id === 'completeSheetBackdrop') closeCompleteSheet(); }
+
+async function confirmCompleteOrder(){
+  if(!completingOrderId) return;
+  const o = store.orders.find(x=>x.id===completingOrderId); if(!o) return;
+  const val = parseInt(document.getElementById('inpNominalFinal').value.replace(/\D/g,'')) || o.nominal;
   const now = Date.now();
   const startRef = o.tsStarted || o.tsAssigned || o.ts;
   o.status = 'selesai'; o.nominalAktual = val; o.tsCompleted = now; o.durasiMenit = Math.max(1, Math.round((now-startRef)/60000)); o.tsUpdate = now;
   await persistOrders(); render(); renderFleetMap();
-  if(trackingOrderId===orderId) closeTracking();
+  if(trackingOrderId===completingOrderId) closeTracking();
+  closeCompleteSheet();
   showToast('Pesanan selesai');
 }
 async function cancelOrder(orderId){
@@ -1313,7 +1371,7 @@ function renderTracking(orderId, silent){
   let actionsHtml = '';
   if(session.role === 'driver' && o.driver && o.driver.toLowerCase()===nama){
     if(o.status==='ditugaskan') actionsHtml = `<button class="act-btn primary" style="width:100%;" onclick="startOrder('${o.id}')">Mulai Jalan</button>`;
-    else if(o.status==='diproses') actionsHtml = `<button class="act-btn success" style="width:100%;" onclick="completeOrder('${o.id}')">Selesaikan Pesanan</button>`;
+    else if(o.status==='diproses') actionsHtml = `<button class="act-btn success" style="width:100%;" onclick="openCompleteSheet('${o.id}')">Selesaikan Pesanan</button>`;
   } else {
     actionsHtml = `<button class="act-btn ghost" style="width:100%;" onclick="closeTracking()">Tutup</button>`;
   }
