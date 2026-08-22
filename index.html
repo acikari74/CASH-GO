@@ -317,10 +317,10 @@
       <div class="sheet-title">Pesanan Baru</div>
 
       <div class="type-toggle">
-        <button type="button" class="type-btn antar" id="btnAntar" onclick="setJenis('antar')">🚗 Antar Cash</button>
-        <button type="button" class="type-btn tarik" id="btnTarik" onclick="setJenis('tarik')">🏦 Tarik Tunai</button>
+        <button type="button" class="type-btn antar" id="btnAntar" onclick="setJenis('antar')">💰 Setor Tunai Toko</button>
+        <button type="button" class="type-btn tarik" id="btnTarik" onclick="setJenis('tarik')">🏧 Tarik Tunai Toko</button>
       </div>
-      <div class="hint" id="jenisHint">Antar cash ke toko yang butuh stok tunai.</div>
+      <div class="hint" id="jenisHint">Setor tunai ke toko yang butuh stok kas.</div>
 
       <div class="field">
         <label>Nominal (Rp)</label>
@@ -329,24 +329,14 @@
 
       <div class="field" id="storePickerField">
         <div class="toko-tools">
-          <label style="margin-bottom:0;">Pilih Toko Tujuan</label>
+          <label style="margin-bottom:0;">Pilih Toko</label>
         </div>
         <div class="store-grid" id="storeGrid"></div>
       </div>
 
       <div class="field hidden" id="storeLockedField">
-        <label>Toko Tujuan</label>
+        <label>Toko</label>
         <div class="store-locked" id="storeLockedDisplay"></div>
-      </div>
-
-      <div class="field hidden" id="addressField">
-        <label>Lokasi Bank / ATM Tujuan</label>
-        <div class="geo-row">
-          <input type="text" id="inpTujuan" placeholder="cth. BRI KCP Merdeka">
-          <button type="button" class="geo-btn" onclick="searchLocation()">📍 Cari</button>
-        </div>
-        <div id="geoResults" class="geo-results"></div>
-        <div id="geoPicked"></div>
       </div>
 
       <div class="field">
@@ -379,7 +369,7 @@
         <div class="field">
           <label>Driver Penanggung Jawab</label>
           <select id="inpStoreDriver"><option value="">Belum ditentukan (tugaskan manual nanti)</option></select>
-          <div class="hint" style="margin-top:6px;">Kalau dipilih, pesanan Antar Cash dari toko ini otomatis langsung masuk ke driver ini.</div>
+          <div class="hint" style="margin-top:6px;">Kalau dipilih, pesanan dari toko ini otomatis langsung masuk ke driver ini.</div>
         </div>
         <div class="field"><label>Username Login Toko</label><input type="text" id="inpStoreUser" placeholder="cth. toko1"></div>
         <div class="field"><label>Password</label><input type="text" id="inpStorePass" placeholder="buat password sederhana"></div>
@@ -476,7 +466,6 @@ let loginRole = 'owner';
 
 let currentJenis = 'antar';
 let activeTab = 'semua';
-let pickedGeo = null;
 let pickedStore = null;
 let pickedStoreGeo = null;
 let watchId = null;
@@ -744,29 +733,6 @@ function startWatching(){
 }
 function stopWatching(){ if(watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null; } }
 
-// ================= Geocoding (Nominatim) =================
-async function searchLocation(){
-  const q = document.getElementById('inpTujuan').value.trim();
-  if(!q){ showToast('Ketik alamat dulu'); return; }
-  const box = document.getElementById('geoResults');
-  box.innerHTML = '<div class="geo-item">Mencari lokasi...</div>';
-  try{
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=id&limit=4&q=' + encodeURIComponent(q);
-    const res = await fetch(url);
-    const results = await res.json();
-    if(!results.length){ box.innerHTML = '<div class="geo-item">Lokasi tidak ditemukan, coba kata kunci lain.</div>'; return; }
-    box.innerHTML = results.map(r=>`<div class="geo-item" onclick='pickGeo(${escapeHtml(JSON.stringify(r)).replace(/'/g,"&#39;")})'><b>${escapeHtml(r.display_name.split(',')[0])}</b><br>${escapeHtml(r.display_name)}</div>`).join('');
-  }catch(e){
-    box.innerHTML = '<div class="geo-item">Gagal mencari lokasi. Periksa koneksi internet.</div>';
-  }
-}
-function pickGeo(r){
-  pickedGeo = { lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name };
-  document.getElementById('inpTujuan').value = r.display_name;
-  document.getElementById('geoResults').innerHTML = '';
-  document.getElementById('geoPicked').innerHTML = `<div class="geo-picked">✓ Koordinat tersimpan untuk pelacakan live</div>`;
-}
-
 // ================= Store management (Owner only) =================
 function renderStoreBar(){ const sub=document.getElementById('storeCountSub'); if(sub) sub.textContent = stores.length + ' toko tersimpan'; }
 function fillStoreDriverSelect(){
@@ -929,11 +895,7 @@ function myLinkedStore(){
 
 function openSheet(){
   document.getElementById('inpNominal').value = '';
-  document.getElementById('inpTujuan').value = '';
   document.getElementById('inpNote').value = '';
-  document.getElementById('geoResults').innerHTML = '';
-  document.getElementById('geoPicked').innerHTML = '';
-  pickedGeo = null;
 
   const linked = myLinkedStore();
   pickedStore = linked || null;
@@ -948,19 +910,18 @@ function setJenis(jenis){
   currentJenis = jenis;
   document.getElementById('btnAntar').classList.toggle('active', jenis==='antar');
   document.getElementById('btnTarik').classList.toggle('active', jenis==='tarik');
-  document.getElementById('jenisHint').textContent = jenis==='antar' ? 'Antar cash ke toko yang butuh stok tunai.' : 'Tarik tunai dari bank/ATM untuk mengisi ulang stok kas.';
+  document.getElementById('jenisHint').textContent = jenis==='antar' ? 'Setor tunai ke toko yang butuh stok kas.' : 'Tarik tunai dari toko yang kelebihan stok kas.';
 
   const linked = myLinkedStore();
-  const showLocked = jenis==='antar' && !!linked;
+  const showLocked = !!linked;
   document.getElementById('storeLockedField').classList.toggle('hidden', !showLocked);
-  document.getElementById('storePickerField').classList.toggle('hidden', jenis!=='antar' || showLocked);
-  document.getElementById('addressField').classList.toggle('hidden', jenis!=='tarik');
+  document.getElementById('storePickerField').classList.toggle('hidden', showLocked);
 
   if(showLocked){
     document.getElementById('storeLockedDisplay').innerHTML = `
       <div class="icon">🏪</div>
       <div><div class="sn">${escapeHtml(linked.nama)}</div><div class="sub">${linked.driverNama ? '🛵 otomatis ke '+escapeHtml(linked.driverNama) : 'Belum ada driver tetap'}</div></div>`;
-  } else if(jenis==='antar'){
+  } else {
     renderStoreGrid();
   }
 }
@@ -969,17 +930,13 @@ async function saveOrder(){
   const nominal = parseInt(document.getElementById('inpNominal').value) || 0;
   const catatan = document.getElementById('inpNote').value.trim();
   if(nominal <= 0){ showToast('Isi nominal dulu, ya'); return; }
+  if(!pickedStore){ showToast('Pilih toko dulu, ya'); return; }
 
-  let tujuan, tujuanLat, tujuanLng, autoDriver = null;
-  if(currentJenis === 'antar'){
-    if(!pickedStore){ showToast('Pilih toko tujuan dulu, ya'); return; }
-    tujuan = pickedStore.nama; tujuanLat = pickedStore.lat||null; tujuanLng = pickedStore.lng||null;
-    if(pickedStore.driverNama && drivers.some(d=>d.nama===pickedStore.driverNama)) autoDriver = pickedStore.driverNama;
-  } else {
-    tujuan = document.getElementById('inpTujuan').value.trim();
-    if(!tujuan){ showToast('Isi lokasi bank/ATM tujuan dulu, ya'); return; }
-    tujuanLat = pickedGeo ? pickedGeo.lat : null; tujuanLng = pickedGeo ? pickedGeo.lng : null;
-  }
+  const tujuan = pickedStore.nama;
+  const tujuanLat = pickedStore.lat || null;
+  const tujuanLng = pickedStore.lng || null;
+  let autoDriver = null;
+  if(pickedStore.driverNama && drivers.some(d=>d.nama===pickedStore.driverNama)) autoDriver = pickedStore.driverNama;
 
   const now = Date.now();
   const order = {
@@ -1029,8 +986,8 @@ function renderSummary(){
   document.getElementById('summaryGrid').innerHTML = `
     <div class="sum-card"><div class="sum-icon a">📦</div><div class="sum-label">Pesanan Hari Ini</div><div class="sum-val">${todays.length}</div></div>
     <div class="sum-card"><div class="sum-icon b">⏱️</div><div class="sum-label">Sedang Berjalan</div><div class="sum-val">${pending}</div></div>
-    <div class="sum-card"><div class="sum-icon c">🚗</div><div class="sum-label">Antar Cash</div><div class="sum-val">${fmtRp(antarTotal)}</div></div>
-    <div class="sum-card"><div class="sum-icon d">🏦</div><div class="sum-label">Tarik Tunai</div><div class="sum-val">${fmtRp(tarikTotal)}</div></div>
+    <div class="sum-card"><div class="sum-icon c">💰</div><div class="sum-label">Setor Tunai Toko</div><div class="sum-val">${fmtRp(antarTotal)}</div></div>
+    <div class="sum-card"><div class="sum-icon d">🏧</div><div class="sum-label">Tarik Tunai Toko</div><div class="sum-val">${fmtRp(tarikTotal)}</div></div>
   `;
 }
 function renderTabs(){
@@ -1111,7 +1068,7 @@ function renderPerfLog(){
       <div class="log-row">
         <div class="log-row-top">
           <div>
-            <div class="lt">🛵 ${escapeHtml(o.driver)} · ${o.jenis==='antar'?'🚗 Antar Cash':'🏦 Tarik Tunai'}</div>
+            <div class="lt">🛵 ${escapeHtml(o.driver)} · ${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</div>
             <div class="lsub">${escapeHtml(o.tujuan)} · ${fmtRp(o.nominal)}${o.dibuatOleh ? ' · oleh '+escapeHtml(o.dibuatOleh) : ''}</div>
           </div>
           <div class="ltime">${timeStr}</div>
@@ -1161,8 +1118,8 @@ function render(){
   wrap.innerHTML = list.map(o => {
     const d = new Date(o.ts);
     const timeStr = d.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-    const icon = o.jenis === 'antar' ? '🚗' : '🏦';
-    const jenisLabel = o.jenis === 'antar' ? 'Antar Cash' : 'Tarik Tunai';
+    const icon = o.jenis === 'antar' ? '💰' : '🏧';
+    const jenisLabel = o.jenis === 'antar' ? 'Setor Tunai Toko' : 'Tarik Tunai Toko';
     let timerBadge = '';
     if(o.status==='ditugaskan'){
       const startRef = o.tsAssigned || o.ts;
@@ -1360,7 +1317,7 @@ function renderTracking(orderId, silent){
   }
 
   document.getElementById('trackDetails').innerHTML = `
-    <div class="track-info-row"><span class="k">Jenis</span><span class="v">${o.jenis==='antar'?'🚗 Antar Cash':'🏦 Tarik Tunai'}</span></div>
+    <div class="track-info-row"><span class="k">Jenis</span><span class="v">${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</span></div>
     <div class="track-info-row"><span class="k">Nominal</span><span class="v">${fmtRp(o.nominal)}</span></div>
     <div class="track-info-row"><span class="k">Tujuan</span><span class="v" style="text-align:right;max-width:60%;">${escapeHtml(o.tujuan)}</span></div>
     <div class="track-info-row"><span class="k">Driver</span><span class="v">${o.driver ? '🛵 '+escapeHtml(o.driver) : 'Belum ditugaskan'}</span></div>
