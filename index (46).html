@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>CashGo — Kurir Kas BRILink</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#F3F5F7; --dark:#0B0F14; --dark2:#161C24;
+    --green:#00B14F; --green-deep:#00913F; --green-soft:#E6F9EE;
+    --ink:#16181D; --ink-soft:#6B7280; --ink-faint:#9CA3AF;
+    --card:#FFFFFF; --border:#EAECEF;
+    --blue:#2F6FEB; --blue-soft:#EAF1FF;
+    --amber:#F59E0B; --amber-soft:#FEF6E7;
+    --red:#DC2626; --red-soft:#FDECEC;
+    --shadow:0 1px 2px rgba(16,24,32,.04), 0 6px 16px rgba(16,24,32,.07);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg); font-family:'Inter',sans-serif; color:var(--ink); min-height:100vh;}
+  h1,h2,h3,.brand{font-family:'Plus Jakarta Sans',sans-serif;}
+  .hidden{display:none !important;}
+
+  /* ---------- Login screen ---------- */
+  #loginScreen{min-height:100vh; background:linear-gradient(170deg,var(--dark) 0%,var(--dark2) 55%, var(--bg) 55%); display:flex; flex-direction:column; align-items:center; padding:56px 18px 30px;}
+  .login-brand{font-size:26px; font-weight:800; color:#fff; letter-spacing:-.01em;}
+  .login-brand .go{color:var(--green);}
+  .login-tagline{font-size:12.5px; color:rgba(255,255,255,.6); margin-top:3px; margin-bottom:26px;}
+  .login-card{background:var(--card); border-radius:20px; padding:22px 20px 24px; width:100%; max-width:400px; box-shadow:0 20px 40px rgba(0,0,0,.18);}
+  .login-role-switch{display:flex;gap:6px;background:var(--bg);border-radius:12px;padding:4px;margin-bottom:18px;}
+  .login-role-btn{flex:1;padding:10px 4px;border:none;background:transparent;border-radius:9px;font-size:12.5px;font-weight:700;color:var(--ink-soft);cursor:pointer;font-family:'Inter',sans-serif;}
+  .login-role-btn.active{background:var(--dark);color:#fff;}
+  .login-title{font-size:17px;font-weight:800;color:var(--ink);margin-bottom:3px;}
+  .login-sub{font-size:12px;color:var(--ink-soft);margin-bottom:16px;}
+  .login-field{margin-bottom:12px;}
+  .login-field label{font-size:11px;font-weight:700;color:var(--ink);display:block;margin:0 0 6px 2px;text-transform:uppercase;letter-spacing:.04em;}
+  .login-field input{width:100%;padding:12px 13px;border-radius:11px;border:1.5px solid var(--border);background:var(--card);font-size:14.5px;color:var(--ink);font-family:'Inter',sans-serif;}
+  .login-field input:focus{outline:none;border-color:var(--green);}
+  .login-btn{width:100%;padding:14px;border:none;border-radius:12px;background:var(--green);color:#04150a;font-size:15px;font-weight:800;cursor:pointer;margin-top:4px;}
+  .login-error{background:var(--red-soft);color:var(--red);font-size:12px;font-weight:600;padding:9px 12px;border-radius:10px;margin-bottom:12px;}
+  .login-hint{font-size:11.5px;color:var(--ink-soft);margin-top:12px;text-align:center;line-height:1.5;}
+  .login-toggle-link{text-align:center;font-size:12px;color:var(--green-deep);font-weight:700;cursor:pointer;margin-top:14px;}
+
+  /* ---------- App shell ---------- */
+  .topbar{background:linear-gradient(160deg,var(--dark) 0%,var(--dark2) 100%); padding:16px 16px 46px; position:relative;}
+  .topbar-row{display:flex;align-items:flex-start;justify-content:space-between;}
+  .brand{font-size:20px; font-weight:800; color:#fff; letter-spacing:-.01em;}
+  .brand .go{color:var(--green);}
+  .tagline{font-size:11.5px; color:rgba(255,255,255,.55); margin-top:1px;}
+  .user-chip{background:rgba(255,255,255,.1);border-radius:12px;padding:8px 12px;text-align:right;}
+  .user-chip .nm{font-size:12.5px;font-weight:700;color:#fff;}
+  .user-chip .rl{font-size:10px;color:var(--green);font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+  .logout-btn{margin-top:6px;background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.8);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:8px;cursor:pointer;}
+
+  .wrap{max-width:480px;margin:0 auto;padding:0 16px 100px;}
+  .lift{margin-top:-30px;position:relative;z-index:2;}
+
+  .share-toggle{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow);}
+  .share-toggle .lbl{font-size:13px;font-weight:600;}
+  .share-toggle .sub{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .switch{width:42px;height:24px;border-radius:20px;background:#DDE1E6;position:relative;cursor:pointer;flex:0 0 42px;transition:background .2s;}
+  .switch.on{background:var(--green);}
+  .switch .dot{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+  .switch.on .dot{left:20px;}
+
+  .manage-bar{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;}
+  .manage-bar .lbl{font-size:13px;font-weight:700;}
+  .manage-bar .sub{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .manage-bar .chev{color:var(--ink-faint);font-size:14px;}
+
+  .map-card{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:12px;margin-top:12px;position:relative;}
+  #fleetMap{height:200px;width:100%;background:#E5E9ED;}
+  .map-badge{position:absolute;top:10px;left:10px;background:rgba(11,15,20,.75);color:#fff;font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;z-index:500;}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:#ff4d4d;animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,77,77,.6);}70%{box-shadow:0 0 0 6px rgba(255,77,77,0);}100%{box-shadow:0 0 0 0 rgba(255,77,77,0);}}
+  .map-count{position:absolute;top:10px;right:10px;background:#fff;color:var(--ink);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;z-index:500;box-shadow:var(--shadow);}
+
+  .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px;}
+  .sum-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 13px;box-shadow:var(--shadow);}
+  .sum-icon{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;margin-bottom:7px;}
+  .sum-icon.a{background:var(--green-soft);}
+  .sum-icon.b{background:var(--blue-soft);}
+  .sum-icon.c{background:var(--amber-soft);}
+  .sum-icon.d{background:var(--red-soft);}
+  .sum-label{font-size:10.5px;color:var(--ink-soft);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .sum-val{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums;}
+
+  .tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;}
+  .tab{flex:0 0 auto;padding:8px 15px;border-radius:20px;border:1px solid var(--border);background:var(--card);font-size:12.5px;font-weight:700;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
+  .tab.active{background:var(--dark);border-color:var(--dark);color:#fff;}
+
+  .order{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 15px;margin-bottom:11px;box-shadow:var(--shadow);}
+  .order-top{display:flex;align-items:flex-start;gap:11px;}
+  .order-icon{width:38px;height:38px;border-radius:11px;flex:0 0 38px;display:flex;align-items:center;justify-content:center;background:var(--blue-soft);color:var(--blue);font-size:17px;}
+  .order.tarik .order-icon{background:var(--amber-soft);color:var(--amber);}
+  .order-mid{flex:1;min-width:0;}
+  .order-jenis{font-size:14px;font-weight:800;color:var(--ink);}
+  .order-tujuan{font-size:12px;color:var(--ink-soft);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .order-right{text-align:right;flex:0 0 auto;}
+  .order-amount{font-weight:800;font-size:14.5px;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .order-time{font-size:10.5px;color:var(--ink-faint);margin-top:3px;}
+
+  .order-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px;align-items:center;}
+  .badge{font-size:10.5px;padding:4.5px 10px;border-radius:20px;font-weight:700;display:flex;align-items:center;gap:5px;}
+  .badge.baru{background:#F1F2F4;color:var(--ink-soft);}
+  .badge.ditugaskan{background:var(--blue-soft);color:var(--blue);}
+  .badge.diproses{background:var(--green-soft);color:var(--green-deep);}
+  .badge.selesai{background:#E7F7EE;color:#067647;}
+  .badge.batal{background:var(--red-soft);color:var(--red);}
+  .badge.driver{background:#fff;border:1px solid var(--border);color:var(--ink-soft);}
+  .badge .bdot{width:5px;height:5px;border-radius:50%;background:var(--green-deep);animation:pulse 1.4s infinite;}
+  .badge.live-timer{background:var(--amber-soft);color:#B45309;}
+  .badge.durasi{background:#E7F7EE;color:#067647;}
+
+  .perf-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 15px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .perf-title{font-size:13.5px;font-weight:800;color:var(--ink);margin-bottom:10px;}
+  .perf-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .perf-row:last-child{border-bottom:none;}
+  .perf-rank{width:22px;height:22px;border-radius:50%;background:var(--bg);color:var(--ink-soft);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:0 0 22px;}
+  .perf-row:nth-child(1) .perf-rank{background:#FFF4E5;color:#B45309;}
+  .perf-name{flex:1;font-size:13px;font-weight:700;color:var(--ink);}
+  .perf-sub{font-size:10.5px;font-weight:500;color:var(--ink-soft);margin-top:2px;}
+  .perf-lock{font-size:9.5px;font-weight:700;color:var(--ink-faint);background:var(--bg);padding:3px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;}
+
+  .log-filter{display:flex;gap:8px;margin-bottom:14px;}
+  .log-filter select{flex:1;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-size:13px;color:var(--ink);font-family:'Inter',sans-serif;}
+  .log-row{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:9px;}
+  .log-row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .log-row .lt{font-size:13px;font-weight:800;color:var(--ink);}
+  .log-row .lsub{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .log-row .ltime{font-size:10.5px;color:var(--ink-faint);text-align:right;flex:0 0 auto;}
+  .log-metrics{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;}
+  .log-metric{background:var(--bg);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:var(--ink-soft);}
+  .log-metric b{color:var(--green-deep);}
+  .perf-stat{text-align:right;}
+  .perf-stat .n{font-size:13px;font-weight:800;color:var(--green-deep);}
+  .perf-stat .s{font-size:10px;color:var(--ink-soft);}
+
+  .order-note{font-size:12px;color:var(--ink-soft);margin-top:9px;font-style:italic;}
+
+  .order-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  .act-btn{flex:1;min-width:100px;padding:10px;border-radius:10px;border:none;font-size:12.5px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
+  .act-btn.primary{background:var(--dark);color:#fff;}
+  .act-btn.track{background:var(--green);color:#04150a;}
+  .act-btn.ghost{background:var(--bg);border:1px solid var(--border);color:var(--ink-soft);}
+  .act-btn.danger{background:var(--red-soft);color:var(--red);}
+  .act-btn.success{background:var(--green);color:#04150a;}
+  select.act-select{flex:1;min-width:100px;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--card);font-size:12.5px;font-family:'Inter',sans-serif;color:var(--ink);}
+
+  .empty-state{text-align:center;padding:38px 20px;color:var(--ink-soft);font-size:13px;border:1.5px dashed var(--border);border-radius:16px;background:var(--card);}
+  .empty-state .big{font-size:28px;display:block;margin-bottom:8px;}
+
+  .fab{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;max-width:448px;width:calc(100% - 32px);background:var(--green);color:#04150a;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 10px 24px rgba(0,177,79,.35);cursor:pointer;z-index:40;}
+
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(11,15,20,.55);z-index:50;display:none;align-items:flex-end;justify-content:center;}
+  .sheet-backdrop.open{display:flex;}
+  .sheet{background:var(--bg);width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:20px 18px 22px;max-height:90vh;overflow-y:auto;animation:slideup .22s ease-out;}
+  @keyframes slideup{from{transform:translateY(24px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  .sheet-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+  .sheet-title{font-size:19px;font-weight:800;color:var(--ink);margin-bottom:16px;}
+
+  .type-toggle{display:flex;gap:8px;margin-bottom:14px;}
+  .type-btn{flex:1;padding:12px;border-radius:12px;border:1.5px solid var(--border);background:var(--card);font-weight:700;font-size:13px;color:var(--ink-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .type-btn.active.antar{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);}
+  .type-btn.active.tarik{border-color:var(--amber);background:var(--amber-soft);color:#B45309;}
+
+  label{font-size:11.5px;font-weight:700;color:var(--ink);display:block;margin:0 0 6px 2px;text-transform:uppercase;letter-spacing:.04em;}
+  .field{margin-bottom:13px;}
+  input[type=text],input[type=number],input[type=password]{width:100%;padding:12px 13px;border-radius:11px;border:1.5px solid var(--border);background:var(--card);font-size:14.5px;color:var(--ink);font-family:'Inter',sans-serif;}
+  input:focus{outline:none;border-color:var(--green);}
+  .hint{font-size:11.5px;color:var(--ink-soft);margin:-5px 0 13px 2px;}
+
+  .geo-row{display:flex;gap:8px;}
+  .geo-row input{flex:1;}
+  .geo-btn{flex:0 0 auto;padding:0 14px;border-radius:11px;border:1.5px solid var(--border);background:var(--card);font-size:12px;font-weight:700;color:var(--ink);cursor:pointer;}
+  .geo-results{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+  .geo-item{padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--card);font-size:12px;color:var(--ink-soft);cursor:pointer;}
+  .geo-item:hover{border-color:var(--green);}
+  .geo-item b{color:var(--ink);}
+  .geo-picked{font-size:11.5px;color:var(--green-deep);font-weight:700;margin-top:6px;display:flex;align-items:center;gap:5px;}
+
+  .store-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .store-chip{padding:12px 12px;border-radius:12px;border:1.5px solid var(--border);background:var(--card);cursor:pointer;text-align:left;}
+  .store-chip .sn{font-size:13px;font-weight:800;color:var(--ink);}
+  .store-chip .sa{font-size:10.5px;color:var(--ink-soft);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .store-chip.active{border-color:var(--green);background:var(--green-soft);}
+  .store-chip.active .sn{color:var(--green-deep);}
+  .store-empty{grid-column:1/-1;text-align:center;padding:18px 10px;color:var(--ink-soft);font-size:12.5px;border:1.5px dashed var(--border);border-radius:12px;}
+  .store-manage-link{text-align:center;margin-top:10px;font-size:12px;color:var(--green-deep);font-weight:700;cursor:pointer;text-decoration:underline;}
+  .store-locked{display:flex;align-items:center;gap:10px;background:var(--green-soft);border:1.5px solid var(--green);border-radius:12px;padding:12px 14px;}
+  .store-locked .icon{font-size:18px;}
+  .store-locked .sn{font-size:14px;font-weight:800;color:var(--green-deep);}
+  .store-locked .sub{font-size:10.5px;color:var(--ink-soft);margin-top:1px;}
+  .toko-tools{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+  .toko-tools .add-link{font-size:12px;color:var(--green-deep);font-weight:700;cursor:pointer;}
+
+  .store-list-item{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 13px;margin-bottom:8px;}
+  .store-list-item .sn{font-size:13.5px;font-weight:700;}
+  .store-list-item .sa{font-size:11px;color:var(--ink-soft);margin-top:2px;}
+  .store-del{border:none;background:var(--red-soft);color:var(--red);width:28px;height:28px;border-radius:8px;font-size:13px;cursor:pointer;flex:0 0 28px;}
+
+  .save-btn{width:100%;padding:14px;border:none;border-radius:12px;background:var(--dark);color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;}
+  .cancel-link{text-align:center;margin-top:12px;font-size:13px;color:var(--ink-soft);text-decoration:underline;cursor:pointer;}
+
+  .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:var(--dark);color:#fff;padding:10px 18px;border-radius:20px;font-size:12.5px;z-index:70;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:var(--shadow);}
+  .toast.show{opacity:1;}
+
+  .track-modal{position:fixed;inset:0;background:var(--bg);z-index:80;display:none;flex-direction:column;}
+  .track-modal.open{display:flex;}
+  .track-top{position:relative;}
+  #trackMap{height:46vh;width:100%;background:#E5E9ED;}
+  .track-close{position:absolute;top:14px;left:14px;z-index:500;width:36px;height:36px;border-radius:50%;background:#fff;border:none;box-shadow:var(--shadow);font-size:16px;cursor:pointer;}
+  .track-live{position:absolute;top:14px;right:14px;z-index:500;background:rgba(11,15,20,.75);color:#fff;font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;}
+  .track-body{flex:1;overflow-y:auto;padding:18px 18px 100px;}
+  .track-card{background:var(--card);border-radius:16px;padding:16px;box-shadow:var(--shadow);margin-bottom:14px;}
+  .track-eta{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .track-eta .big-eta{font-size:22px;font-weight:800;}
+  .track-eta .eta-label{font-size:11px;color:var(--ink-soft);}
+  .track-eta .dist{text-align:right;font-size:13px;color:var(--ink-soft);font-weight:600;}
+
+  .stepper{display:flex;align-items:center;margin-bottom:4px;}
+  .step{display:flex;flex-direction:column;align-items:center;flex:1;position:relative;}
+  .step .circ{width:22px;height:22px;border-radius:50%;background:#EAECEF;color:var(--ink-faint);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;z-index:2;}
+  .step.done .circ{background:var(--green);color:#04150a;}
+  .step.current .circ{background:var(--dark);color:#fff;}
+  .step .lbl{font-size:9.5px;color:var(--ink-soft);margin-top:6px;text-align:center;font-weight:600;}
+  .step .bar{position:absolute;top:11px;left:50%;width:100%;height:2px;background:#EAECEF;z-index:1;}
+  .step.done .bar{background:var(--green);}
+  .step:last-child .bar{display:none;}
+
+  .track-info-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+  .track-info-row:last-child{border-bottom:none;}
+  .track-info-row .k{color:var(--ink-soft);}
+  .track-info-row .v{font-weight:700;color:var(--ink);}
+
+  .track-actions{position:fixed;bottom:0;left:0;right:0;background:var(--card);padding:14px 18px 20px;box-shadow:0 -4px 16px rgba(0,0,0,.06);z-index:85;}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen">
+  <div class="login-brand">Cash<span class="go">Go</span></div>
+  <div class="login-tagline">Kurir kas real-time untuk kebutuhan BRILink</div>
+
+  <div class="login-card">
+    <div class="login-role-switch">
+      <button class="login-role-btn" id="lrbOwner" onclick="switchLoginRole('owner')">👑 Owner</button>
+      <button class="login-role-btn" id="lrbStaff" onclick="switchLoginRole('staff')">🏪 Staff</button>
+      <button class="login-role-btn" id="lrbDriver" onclick="switchLoginRole('driver')">🛵 Driver</button>
+    </div>
+    <div id="loginFormArea"></div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appScreen" class="hidden">
+  <div class="topbar">
+    <div class="wrap" style="padding:0;">
+      <div class="topbar-row">
+        <div>
+          <div class="brand">Cash<span class="go">Go</span></div>
+          <div class="tagline">Kurir kas real-time untuk kebutuhan BRILink</div>
+        </div>
+        <div class="user-chip">
+          <div class="nm" id="userChipName">—</div>
+          <div class="rl" id="userChipRole">—</div>
+          <button class="logout-btn" onclick="logout()">Keluar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap lift">
+    <div class="share-toggle hidden" id="shareToggleWrap">
+      <div>
+        <div class="lbl">Bagikan Lokasi Live</div>
+        <div class="sub" id="shareSub">Nonaktif — lokasi tidak terlihat driver lain</div>
+      </div>
+      <div class="switch" id="shareSwitch" onclick="toggleShareLocation()"><div class="dot"></div></div>
+    </div>
+
+    <div class="manage-bar hidden" id="manageBarWrap" onclick="openStoreManager()">
+      <div><div class="lbl">🏬 Kelola Daftar Toko</div><div class="sub" id="storeCountSub">0 toko tersimpan</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="manage-bar hidden" id="driverManageBarWrap" onclick="openDriverManager()">
+      <div><div class="lbl">🛵 Kelola Akun Driver</div><div class="sub" id="driverCountSub">0 driver terdaftar</div></div>
+      <div class="chev">›</div>
+    </div>
+
+    <div class="map-card">
+      <div class="map-badge"><span class="live-dot"></span>LIVE</div>
+      <div class="map-count" id="fleetCount">0 driver aktif</div>
+      <div id="fleetMap"></div>
+    </div>
+
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div id="driverPerfWrap"></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="orderList"></div>
+  </div>
+
+  <button class="fab hidden" id="fab" onclick="openSheet()">＋ Buat Pesanan Baru</button>
+
+  <!-- Create order sheet -->
+  <div class="sheet-backdrop" id="sheetBackdrop" onclick="closeOnBackdrop(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Pesanan Baru</div>
+
+      <div class="type-toggle">
+        <button type="button" class="type-btn antar" id="btnAntar" onclick="setJenis('antar')">🚗 Antar Cash</button>
+        <button type="button" class="type-btn tarik" id="btnTarik" onclick="setJenis('tarik')">🏦 Tarik Tunai</button>
+      </div>
+      <div class="hint" id="jenisHint">Antar cash ke toko yang butuh stok tunai.</div>
+
+      <div class="field">
+        <label>Nominal (Rp)</label>
+        <input type="number" id="inpNominal" placeholder="0" inputmode="numeric">
+      </div>
+
+      <div class="field" id="storePickerField">
+        <div class="toko-tools">
+          <label style="margin-bottom:0;">Pilih Toko Tujuan</label>
+        </div>
+        <div class="store-grid" id="storeGrid"></div>
+      </div>
+
+      <div class="field hidden" id="storeLockedField">
+        <label>Toko Tujuan</label>
+        <div class="store-locked" id="storeLockedDisplay"></div>
+      </div>
+
+      <div class="field hidden" id="addressField">
+        <label>Lokasi Bank / ATM Tujuan</label>
+        <div class="geo-row">
+          <input type="text" id="inpTujuan" placeholder="cth. BRI KCP Merdeka">
+          <button type="button" class="geo-btn" onclick="searchLocation()">📍 Cari</button>
+        </div>
+        <div id="geoResults" class="geo-results"></div>
+        <div id="geoPicked"></div>
+      </div>
+
+      <div class="field">
+        <label>Catatan (opsional)</label>
+        <input type="text" id="inpNote" placeholder="cth. minta uang pecahan 50rb">
+      </div>
+
+      <button class="save-btn" onclick="saveOrder()">Buat Pesanan</button>
+      <div class="cancel-link" onclick="closeSheet()">Batal</div>
+    </div>
+  </div>
+
+  <!-- Store manager sheet -->
+  <div class="sheet-backdrop" id="storeSheetBackdrop" onclick="closeOnStoreBackdrop(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Kelola Daftar Toko</div>
+      <div id="storeListWrap"></div>
+      <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:16px;">
+        <div class="field"><label>Nama Toko</label><input type="text" id="inpStoreNama" placeholder="cth. Toko 1 / Agen Berkah"></div>
+        <div class="field">
+          <label>Alamat</label>
+          <div class="geo-row">
+            <input type="text" id="inpStoreAlamat" placeholder="cth. Jl. Merdeka No. 10">
+            <button type="button" class="geo-btn" onclick="searchStoreLocation()">📍 Cari</button>
+          </div>
+          <div id="storeGeoResults" class="geo-results"></div>
+          <div id="storeGeoPicked"></div>
+        </div>
+        <div class="field">
+          <label>Driver Penanggung Jawab</label>
+          <select id="inpStoreDriver"><option value="">Belum ditentukan (tugaskan manual nanti)</option></select>
+          <div class="hint" style="margin-top:6px;">Kalau dipilih, pesanan Antar Cash dari toko ini otomatis langsung masuk ke driver ini.</div>
+        </div>
+        <div class="field"><label>Username Login Toko</label><input type="text" id="inpStoreUser" placeholder="cth. toko1"></div>
+        <div class="field"><label>Password</label><input type="text" id="inpStorePass" placeholder="buat password sederhana"></div>
+        <div class="hint" style="margin-top:-6px;">Ini yang dipakai staff toko ini untuk login — tidak perlu akun staff terpisah, toko = staff.</div>
+        <button class="save-btn" onclick="addStore()">+ Tambah Toko</button>
+      </div>
+      <div class="cancel-link" onclick="closeStoreManager()">Tutup</div>
+    </div>
+  </div>
+
+  <!-- Driver manager sheet -->
+  <div class="sheet-backdrop" id="driverSheetBackdrop" onclick="closeOnDriverBackdrop(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Kelola Akun Driver</div>
+      <div id="driverListWrap"></div>
+      <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:16px;">
+        <div class="field"><label>Nama Driver</label><input type="text" id="inpDriverNama" placeholder="cth. Budi Santoso"></div>
+        <div class="field"><label>No. HP (opsional)</label><input type="text" id="inpDriverHp" placeholder="cth. 0812xxxxxxxx"></div>
+        <div class="field"><label>Username Login</label><input type="text" id="inpDriverUser" placeholder="cth. budi01"></div>
+        <div class="field"><label>Password</label><input type="text" id="inpDriverPass" placeholder="buat password sederhana"></div>
+        <button class="save-btn" onclick="addDriver()">+ Tambah Driver</button>
+      </div>
+      <div class="cancel-link" onclick="closeDriverManager()">Tutup</div>
+    </div>
+  </div>
+
+  <!-- Driver performance log sheet (Owner only) -->
+  <div class="sheet-backdrop" id="perfLogSheetBackdrop" onclick="closeOnPerfLogBackdrop(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Log Performa Driver — Semua Transaksi</div>
+      <div class="log-filter">
+        <select id="perfLogFilter" onchange="renderPerfLog()">
+          <option value="">Semua driver</option>
+        </select>
+      </div>
+      <div id="perfLogList"></div>
+      <div class="cancel-link" onclick="closePerfLog()">Tutup</div>
+    </div>
+  </div>
+
+  <!-- Tracking modal -->
+  <div class="track-modal" id="trackModal">
+    <div class="track-top">
+      <button class="track-close" onclick="closeTracking()">✕</button>
+      <div class="track-live"><span class="live-dot"></span>Live Tracking</div>
+      <div id="trackMap"></div>
+    </div>
+    <div class="track-body">
+      <div class="track-card">
+        <div class="track-eta">
+          <div><div class="big-eta" id="trackEta">—</div><div class="eta-label">estimasi tiba</div></div>
+          <div class="dist" id="trackDist">—</div>
+        </div>
+        <div class="stepper" id="trackStepper"></div>
+      </div>
+      <div class="track-card" id="trackDetails"></div>
+    </div>
+    <div class="track-actions" id="trackActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================= FIREBASE CONFIG =================
+// GANTI blok ini dengan config dari Firebase Console kamu sendiri:
+// Project Settings > General > Your apps > SDK setup and configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDhASZq7FoOz-jTpMLyl2ct5DG3IdC-JZo",
+  authDomain: "cashgo-74e37.firebaseapp.com",
+  projectId: "cashgo-74e37",
+  storageBucket: "cashgo-74e37.firebasestorage.app",
+  messagingSenderId: "750484180681",
+  appId: "1:750484180681:web:9085b76b3fa13308074718"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const META = db.collection('meta');
+
+const SESSION_KEY = 'brilink-cash-session'; // localStorage key (lokal per perangkat, aman disimpan di browser)
+const DEFAULT_CENTER = [3.5952, 98.6722]; // Medan
+
+let store = { orders: [] };
+let locations = {};
+let stores = [];
+let drivers = [];
+let ownerAccount = null;
+
+let session = { loggedIn:false, role:null, nama:'', username:'', shareLocation:false };
+let loginRole = 'owner';
+
+let currentJenis = 'antar';
+let activeTab = 'semua';
+let pickedGeo = null;
+let pickedStore = null;
+let pickedStoreGeo = null;
+let watchId = null;
+let lastSentTs = 0;
+
+let fleetMap = null;
+let fleetMarkers = {};
+let trackMap = null;
+let trackMarkers = {};
+let trackingOrderId = null;
+
+function fmtRp(n){ n = Math.round(n||0); return 'Rp ' + n.toLocaleString('id-ID'); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1700); }
+
+function haversineKm(lat1,lng1,lat2,lng2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function etaMinutes(km){ return Math.max(2, Math.round(km/26*60)); }
+function formatElapsed(ms){
+  const totalMin = Math.max(0, Math.floor(ms/60000));
+  if(totalMin < 1) return 'baru saja';
+  if(totalMin < 60) return totalMin + ' menit';
+  const h = Math.floor(totalMin/60), m = totalMin%60;
+  return h + ' jam' + (m>0 ? ' ' + m + ' menit' : '');
+}
+
+// ================= BOOTSTRAP =================
+async function boot(){
+  try{ const raw = localStorage.getItem(SESSION_KEY); if(raw) session = JSON.parse(raw); }catch(e){}
+  try{ await auth.signInAnonymously(); }catch(e){ showToast('Gagal konek ke server. Cek koneksi internet.'); }
+  await loadAccountsAndData();
+  if(session.loggedIn){ enterApp(); }
+  else { renderLoginScreen(); }
+}
+
+async function loadAccountsAndData(){
+  try{ const snap = await META.doc('owner').get(); ownerAccount = snap.exists ? snap.data() : null; }catch(e){}
+  try{ const snap = await META.doc('drivers').get(); drivers = (snap.exists && Array.isArray(snap.data().list)) ? snap.data().list : []; }catch(e){}
+  try{ const snap = await META.doc('stores').get(); stores = (snap.exists && Array.isArray(snap.data().list)) ? snap.data().list : []; }catch(e){}
+  try{ const snap = await META.doc('orders').get(); store = snap.exists ? snap.data() : { orders: [] }; if(!store.orders) store.orders = []; }catch(e){}
+  try{ const snap = await META.doc('locations').get(); locations = snap.exists ? snap.data() : {}; }catch(e){}
+}
+
+function persistSession(){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify(session)); }catch(e){} }
+async function persistOwner(){ try{ await META.doc('owner').set(ownerAccount||{}); }catch(e){ showToast('Gagal menyimpan akun'); } }
+async function persistDrivers(){ try{ await META.doc('drivers').set({ list: drivers }); }catch(e){ showToast('Gagal menyimpan driver'); } }
+async function persistStores(){ try{ await META.doc('stores').set({ list: stores }); }catch(e){ showToast('Gagal menyimpan toko'); } }
+async function persistOrders(){ try{ await META.doc('orders').set(store); }catch(e){ showToast('Gagal menyimpan — coba lagi'); } }
+async function persistLocations(){ try{ await META.doc('locations').set(locations); }catch(e){} }
+
+// ================= REALTIME LISTENERS (menggantikan polling) =================
+function setupRealtimeListeners(){
+  if(window.__listenersStarted) return;
+  window.__listenersStarted = true;
+
+  META.doc('orders').onSnapshot(snap => {
+    store = snap.exists ? snap.data() : { orders: [] };
+    if(!store.orders) store.orders = [];
+    if(!session.loggedIn) return;
+    render(); renderFleetMap(); renderDriverPerf();
+    if(trackingOrderId) renderTracking(trackingOrderId, true);
+    const perfSheet = document.getElementById('perfLogSheetBackdrop');
+    if(perfSheet && perfSheet.classList.contains('open')) renderPerfLog();
+  });
+
+  META.doc('locations').onSnapshot(snap => {
+    locations = snap.exists ? snap.data() : {};
+    if(!session.loggedIn) return;
+    renderFleetMap();
+    if(trackingOrderId) renderTracking(trackingOrderId, true);
+  });
+
+  META.doc('stores').onSnapshot(snap => {
+    stores = (snap.exists && Array.isArray(snap.data().list)) ? snap.data().list : [];
+    if(!session.loggedIn) return;
+    renderStoreBar(); renderStoreGrid();
+    const storeSheet = document.getElementById('storeSheetBackdrop');
+    if(storeSheet && storeSheet.classList.contains('open')) renderStoreManagerList();
+  });
+
+  META.doc('drivers').onSnapshot(snap => {
+    drivers = (snap.exists && Array.isArray(snap.data().list)) ? snap.data().list : [];
+    if(!session.loggedIn) return;
+    renderDriverBar();
+    const driverSheet = document.getElementById('driverSheetBackdrop');
+    if(driverSheet && driverSheet.classList.contains('open')) renderDriverManagerList();
+  });
+}
+
+// ================= LOGIN SCREEN =================
+function switchLoginRole(role){
+  loginRole = role;
+  document.getElementById('lrbOwner').classList.toggle('active', role==='owner');
+  document.getElementById('lrbStaff').classList.toggle('active', role==='staff');
+  document.getElementById('lrbDriver').classList.toggle('active', role==='driver');
+  renderLoginScreen();
+}
+
+function renderLoginScreen(){
+  const area = document.getElementById('loginFormArea');
+  if(loginRole === 'owner'){
+    if(!ownerAccount){
+      area.innerHTML = `
+        <div class="login-title">Buat Akun Owner</div>
+        <div class="login-sub">Ini pertama kalinya aplikasi dipakai — buat akun Owner utama dulu.</div>
+        <div id="loginErr"></div>
+        <div class="login-field"><label>Nama Owner</label><input type="text" id="setupOwnerNama" placeholder="Nama kamu"></div>
+        <div class="login-field"><label>Username</label><input type="text" id="setupOwnerUser" placeholder="cth. owner01"></div>
+        <div class="login-field"><label>Password</label><input type="password" id="setupOwnerPass" placeholder="Buat password"></div>
+        <div class="login-field"><label>Ulangi Password</label><input type="password" id="setupOwnerPass2" placeholder="Ulangi password"></div>
+        <button class="login-btn" onclick="setupOwnerAccount()">Buat Akun Owner</button>
+        <div class="login-hint">Password disimpan sederhana untuk kontrol akses internal tim — bukan enkripsi tingkat bank. Jangan pakai password yang sama dengan akun penting lain.</div>
+      `;
+    } else {
+      area.innerHTML = `
+        <div class="login-title">Masuk sebagai Owner</div>
+        <div class="login-sub">Gunakan akun Owner yang sudah dibuat.</div>
+        <div id="loginErr"></div>
+        <div class="login-field"><label>Username</label><input type="text" id="loginUser" placeholder="Username"></div>
+        <div class="login-field"><label>Password</label><input type="password" id="loginPass" placeholder="Password"></div>
+        <button class="login-btn" onclick="loginOwner()">Masuk</button>
+      `;
+    }
+  } else if(loginRole === 'staff'){
+    area.innerHTML = `
+      <div class="login-title">Masuk sebagai Staff Toko</div>
+      <div class="login-sub">Login pakai username & password toko kamu (diatur Owner lewat Kelola Toko).</div>
+      <div id="loginErr"></div>
+      <div class="login-field"><label>Username</label><input type="text" id="loginUser" placeholder="Username"></div>
+      <div class="login-field"><label>Password</label><input type="password" id="loginPass" placeholder="Password"></div>
+      <button class="login-btn" onclick="loginStaff()">Masuk</button>
+      ${stores.filter(s=>s.username).length===0 ? `<div class="login-hint">Belum ada toko dengan akun login. Minta Owner mendaftarkan lewat Kelola Toko dulu.</div>` : ''}
+    `;
+  } else {
+    area.innerHTML = `
+      <div class="login-title">Masuk sebagai Driver</div>
+      <div class="login-sub">Gunakan akun yang sudah didaftarkan Owner.</div>
+      <div id="loginErr"></div>
+      <div class="login-field"><label>Username</label><input type="text" id="loginUser" placeholder="Username"></div>
+      <div class="login-field"><label>Password</label><input type="password" id="loginPass" placeholder="Password"></div>
+      <button class="login-btn" onclick="loginDriver()">Masuk</button>
+      ${drivers.filter(d=>d.username).length===0 ? `<div class="login-hint">Belum ada akun driver terdaftar. Minta Owner mendaftarkan kamu dulu.</div>` : ''}
+    `;
+  }
+}
+
+function loginErr(msg){
+  document.getElementById('loginErr').innerHTML = `<div class="login-error">${escapeHtml(msg)}</div>`;
+}
+
+async function setupOwnerAccount(){
+  const nama = document.getElementById('setupOwnerNama').value.trim();
+  const user = document.getElementById('setupOwnerUser').value.trim();
+  const pass = document.getElementById('setupOwnerPass').value;
+  const pass2 = document.getElementById('setupOwnerPass2').value;
+  if(!nama || !user || !pass){ loginErr('Lengkapi semua data dulu, ya.'); return; }
+  if(pass !== pass2){ loginErr('Password tidak sama.'); return; }
+  ownerAccount = { username:user, password:pass, nama };
+  await persistOwner();
+  session = { loggedIn:true, role:'owner', nama, username:user, shareLocation:false };
+  await persistSession();
+  enterApp();
+  showToast('Akun Owner berhasil dibuat');
+}
+
+async function loginOwner(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  if(!ownerAccount || user !== ownerAccount.username || pass !== ownerAccount.password){
+    loginErr('Username atau password salah.'); return;
+  }
+  session = { loggedIn:true, role:'owner', nama:ownerAccount.nama, username:user, shareLocation:false };
+  await persistSession();
+  enterApp();
+}
+
+async function loginStaff(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const acc = stores.find(s => s.username===user && s.password===pass);
+  if(!acc){ loginErr('Username atau password salah, atau toko belum didaftarkan Owner.'); return; }
+  session = { loggedIn:true, role:'staff', nama:acc.nama, username:user, storeId:acc.id, storeNama:acc.nama, shareLocation:false };
+  await persistSession();
+  enterApp();
+}
+
+async function loginDriver(){
+  const user = document.getElementById('loginUser').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const acc = drivers.find(a => a.username===user && a.password===pass);
+  if(!acc){ loginErr('Username atau password salah, atau akun belum didaftarkan Owner.'); return; }
+  session = { loggedIn:true, role:'driver', nama:acc.nama, username:user, shareLocation:false };
+  await persistSession();
+  enterApp();
+}
+
+function logout(){
+  if(watchId !== null) stopWatching();
+  session = { loggedIn:false, role:null, nama:'', username:'', shareLocation:false };
+  persistSession();
+  document.getElementById('appScreen').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  loginRole = 'owner';
+  switchLoginRole('owner');
+}
+
+// ================= ENTER APP =================
+function enterApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+
+  document.getElementById('userChipName').textContent = session.nama || session.username;
+  document.getElementById('userChipRole').textContent = session.role==='owner'?'Owner':session.role==='staff'?'Staff Toko':'Driver';
+
+  document.getElementById('fab').classList.toggle('hidden', session.role==='driver');
+  document.getElementById('shareToggleWrap').classList.toggle('hidden', session.role!=='driver');
+  document.getElementById('manageBarWrap').classList.toggle('hidden', session.role!=='owner');
+  document.getElementById('driverManageBarWrap').classList.toggle('hidden', session.role!=='owner');
+
+  updateShareToggleUI();
+  if(!fleetMap) initFleetMap();
+  render();
+  renderFleetMap();
+  renderStoreBar();
+  renderDriverBar();
+
+  if(session.role==='driver' && session.shareLocation) startWatching();
+  setupRealtimeListeners();
+}
+
+// ================= Geolocation sharing =================
+function updateShareToggleUI(){
+  const sw = document.getElementById('shareSwitch');
+  sw.classList.toggle('on', !!session.shareLocation);
+  document.getElementById('shareSub').textContent = session.shareLocation
+    ? 'Aktif — owner & staff bisa lihat lokasi kamu'
+    : 'Nonaktif — lokasi tidak terlihat driver lain';
+}
+function toggleShareLocation(){
+  session.shareLocation = !session.shareLocation;
+  updateShareToggleUI();
+  persistSession();
+  if(session.shareLocation) startWatching(); else stopWatching();
+}
+function startWatching(){
+  if(!navigator.geolocation){ showToast('Perangkat tidak mendukung GPS'); session.shareLocation=false; updateShareToggleUI(); return; }
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      const now = Date.now();
+      if(now - lastSentTs < 4000) return;
+      lastSentTs = now;
+      const key = (session.nama||'').trim().toLowerCase();
+      if(!key) return;
+      locations[key] = { name: session.nama.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude, ts: now };
+      persistLocations();
+      renderFleetMap();
+      if(trackingOrderId) renderTracking(trackingOrderId, true);
+    },
+    err => { showToast('Gagal ambil lokasi: izin GPS ditolak'); session.shareLocation=false; updateShareToggleUI(); persistSession(); },
+    { enableHighAccuracy:true, maximumAge:4000, timeout:12000 }
+  );
+}
+function stopWatching(){ if(watchId!==null){ navigator.geolocation.clearWatch(watchId); watchId=null; } }
+
+// ================= Geocoding (Nominatim) =================
+async function searchLocation(){
+  const q = document.getElementById('inpTujuan').value.trim();
+  if(!q){ showToast('Ketik alamat dulu'); return; }
+  const box = document.getElementById('geoResults');
+  box.innerHTML = '<div class="geo-item">Mencari lokasi...</div>';
+  try{
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=id&limit=4&q=' + encodeURIComponent(q);
+    const res = await fetch(url);
+    const results = await res.json();
+    if(!results.length){ box.innerHTML = '<div class="geo-item">Lokasi tidak ditemukan, coba kata kunci lain.</div>'; return; }
+    box.innerHTML = results.map(r=>`<div class="geo-item" onclick='pickGeo(${escapeHtml(JSON.stringify(r)).replace(/'/g,"&#39;")})'><b>${escapeHtml(r.display_name.split(',')[0])}</b><br>${escapeHtml(r.display_name)}</div>`).join('');
+  }catch(e){
+    box.innerHTML = '<div class="geo-item">Gagal mencari lokasi. Periksa koneksi internet.</div>';
+  }
+}
+function pickGeo(r){
+  pickedGeo = { lat: parseFloat(r.lat), lng: parseFloat(r.lon), label: r.display_name };
+  document.getElementById('inpTujuan').value = r.display_name;
+  document.getElementById('geoResults').innerHTML = '';
+  document.getElementById('geoPicked').innerHTML = `<div class="geo-picked">✓ Koordinat tersimpan untuk pelacakan live</div>`;
+}
+
+// ================= Store management (Owner only) =================
+function renderStoreBar(){ const sub=document.getElementById('storeCountSub'); if(sub) sub.textContent = stores.length + ' toko tersimpan'; }
+function fillStoreDriverSelect(){
+  const sel = document.getElementById('inpStoreDriver');
+  if(!sel) return;
+  const options = drivers.map(d=>`<option value="${escapeHtml(d.nama)}">${escapeHtml(d.nama)}</option>`).join('');
+  sel.innerHTML = `<option value="">Belum ditentukan (tugaskan manual nanti)</option>${options}`;
+}
+function openStoreManager(){
+  document.getElementById('inpStoreNama').value = '';
+  document.getElementById('inpStoreAlamat').value = '';
+  document.getElementById('storeGeoResults').innerHTML = '';
+  document.getElementById('storeGeoPicked').innerHTML = '';
+  document.getElementById('inpStoreUser').value = '';
+  document.getElementById('inpStorePass').value = '';
+  pickedStoreGeo = null;
+  fillStoreDriverSelect();
+  renderStoreManagerList();
+  document.getElementById('storeSheetBackdrop').classList.add('open');
+}
+function closeStoreManager(){ document.getElementById('storeSheetBackdrop').classList.remove('open'); }
+function closeOnStoreBackdrop(e){ if(e.target.id === 'storeSheetBackdrop') closeStoreManager(); }
+function renderStoreManagerList(){
+  const wrap = document.getElementById('storeListWrap');
+  if(!stores.length){ wrap.innerHTML = `<div class="store-empty">Belum ada toko. Tambahkan di bawah.</div>`; return; }
+  const driverOptions = drivers.map(d=>`<option value="${escapeHtml(d.nama)}">${escapeHtml(d.nama)}</option>`).join('');
+  wrap.innerHTML = stores.map(s => `
+    <div class="store-list-item" style="align-items:flex-start;flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+        <div><div class="sn">${escapeHtml(s.nama)}</div><div class="sa">${escapeHtml(s.alamat || (s.lat ? 'Koordinat tersimpan' : 'Tanpa koordinat'))} ${s.username ? '· login: @'+escapeHtml(s.username) : '· belum ada login'}</div></div>
+        <button class="store-del" onclick="deleteStore('${s.id}')">✕</button>
+      </div>
+      <select class="act-select" style="width:100%;" data-store-id="${s.id}" onchange="assignStoreDriver('${s.id}', this.value)">
+        <option value="">🛵 Belum ada driver tetap</option>
+        ${driverOptions}
+      </select>
+    </div>`).join('');
+  wrap.querySelectorAll('select[data-store-id]').forEach(sel => {
+    const s = stores.find(x=>x.id===sel.getAttribute('data-store-id'));
+    if(s && s.driverNama) sel.value = s.driverNama;
+  });
+}
+async function assignStoreDriver(storeId, driverNama){
+  const s = stores.find(x=>x.id===storeId); if(!s) return;
+  s.driverNama = driverNama || null;
+  await persistStores();
+  renderStoreGrid();
+  showToast(driverNama ? `${s.nama} sekarang ditangani ${driverNama}` : `Driver tetap ${s.nama} dihapus`);
+}
+async function searchStoreLocation(){
+  const q = document.getElementById('inpStoreAlamat').value.trim() || document.getElementById('inpStoreNama').value.trim();
+  if(!q){ showToast('Ketik nama/alamat toko dulu'); return; }
+  const box = document.getElementById('storeGeoResults');
+  box.innerHTML = '<div class="geo-item">Mencari lokasi...</div>';
+  try{
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&countrycodes=id&limit=4&q=' + encodeURIComponent(q);
+    const res = await fetch(url);
+    const results = await res.json();
+    if(!results.length){ box.innerHTML = '<div class="geo-item">Lokasi tidak ditemukan. Toko tetap bisa disimpan tanpa koordinat, tapi tidak muncul di peta live.</div>'; return; }
+    box.innerHTML = results.map(r=>`<div class="geo-item" onclick='pickStoreGeo(${escapeHtml(JSON.stringify(r)).replace(/'/g,"&#39;")})'><b>${escapeHtml(r.display_name.split(',')[0])}</b><br>${escapeHtml(r.display_name)}</div>`).join('');
+  }catch(e){ box.innerHTML = '<div class="geo-item">Gagal mencari lokasi. Periksa koneksi internet.</div>'; }
+}
+function pickStoreGeo(r){
+  pickedStoreGeo = { lat: parseFloat(r.lat), lng: parseFloat(r.lon) };
+  document.getElementById('inpStoreAlamat').value = r.display_name;
+  document.getElementById('storeGeoResults').innerHTML = '';
+  document.getElementById('storeGeoPicked').innerHTML = `<div class="geo-picked">✓ Koordinat tersimpan untuk pelacakan live</div>`;
+}
+async function addStore(){
+  const nama = document.getElementById('inpStoreNama').value.trim();
+  const alamat = document.getElementById('inpStoreAlamat').value.trim();
+  const driverNama = document.getElementById('inpStoreDriver').value;
+  const user = document.getElementById('inpStoreUser').value.trim();
+  const pass = document.getElementById('inpStorePass').value.trim();
+  if(!nama){ showToast('Isi nama toko dulu'); return; }
+  if(user && stores.some(s=>s.username && s.username.toLowerCase()===user.toLowerCase())){ showToast('Username sudah dipakai toko lain'); return; }
+  const s = { id:'s'+Date.now()+Math.random().toString(36).slice(2,6), nama, alamat, lat: pickedStoreGeo?pickedStoreGeo.lat:null, lng: pickedStoreGeo?pickedStoreGeo.lng:null, driverNama: driverNama||null, username: user||null, password: pass||null };
+  stores.push(s);
+  await persistStores();
+  renderStoreBar(); renderStoreManagerList(); renderStoreGrid();
+  document.getElementById('inpStoreNama').value = '';
+  document.getElementById('inpStoreAlamat').value = '';
+  document.getElementById('storeGeoPicked').innerHTML = '';
+  document.getElementById('inpStoreDriver').value = '';
+  document.getElementById('inpStoreUser').value = '';
+  document.getElementById('inpStorePass').value = '';
+  pickedStoreGeo = null;
+  showToast('Toko ditambahkan');
+}
+async function deleteStore(id){
+  if(!confirm('Hapus toko ini dari daftar?')) return;
+  stores = stores.filter(s=>s.id!==id);
+  await persistStores();
+  renderStoreBar(); renderStoreManagerList(); renderStoreGrid();
+  showToast('Toko dihapus');
+}
+function renderStoreGrid(){
+  const grid = document.getElementById('storeGrid');
+  if(!grid) return;
+  if(!stores.length){ grid.innerHTML = `<div class="store-empty">Belum ada toko tersimpan. Minta Owner menambahkan dulu.</div>`; return; }
+  grid.innerHTML = stores.map(s => `
+    <button type="button" class="store-chip ${pickedStore && pickedStore.id===s.id ? 'active':''}" onclick="selectStore('${s.id}')">
+      <div class="sn">${escapeHtml(s.nama)}</div>
+      <div class="sa">${s.driverNama ? '🛵 '+escapeHtml(s.driverNama) : 'Belum ada driver tetap'}</div>
+    </button>`).join('');
+}
+function selectStore(id){ pickedStore = stores.find(s=>s.id===id) || null; renderStoreGrid(); }
+
+// ================= Driver account management (Owner only) =================
+function renderDriverBar(){ const sub=document.getElementById('driverCountSub'); if(sub) sub.textContent = drivers.length + ' driver terdaftar'; }
+function openDriverManager(){
+  document.getElementById('inpDriverNama').value = '';
+  document.getElementById('inpDriverHp').value = '';
+  document.getElementById('inpDriverUser').value = '';
+  document.getElementById('inpDriverPass').value = '';
+  renderDriverManagerList();
+  document.getElementById('driverSheetBackdrop').classList.add('open');
+}
+function closeDriverManager(){ document.getElementById('driverSheetBackdrop').classList.remove('open'); }
+function closeOnDriverBackdrop(e){ if(e.target.id === 'driverSheetBackdrop') closeDriverManager(); }
+function renderDriverManagerList(){
+  const wrap = document.getElementById('driverListWrap');
+  if(!drivers.length){ wrap.innerHTML = `<div class="store-empty">Belum ada driver. Tambahkan di bawah.</div>`; return; }
+  wrap.innerHTML = drivers.map(d => `
+    <div class="store-list-item">
+      <div><div class="sn">${escapeHtml(d.nama)}</div><div class="sa">@${escapeHtml(d.username||'-')} · ${escapeHtml(d.hp || 'tanpa HP')}</div></div>
+      <button class="store-del" onclick="deleteDriver('${d.id}')">✕</button>
+    </div>`).join('');
+}
+async function addDriver(){
+  const nama = document.getElementById('inpDriverNama').value.trim();
+  const hp = document.getElementById('inpDriverHp').value.trim();
+  const user = document.getElementById('inpDriverUser').value.trim();
+  const pass = document.getElementById('inpDriverPass').value.trim();
+  if(!nama || !user || !pass){ showToast('Isi nama, username, dan password dulu'); return; }
+  if(drivers.some(d=>d.username.toLowerCase()===user.toLowerCase())){ showToast('Username sudah dipakai driver lain'); return; }
+  const d = { id:'drv'+Date.now()+Math.random().toString(36).slice(2,6), nama, hp, username:user, password:pass };
+  drivers.push(d);
+  await persistDrivers();
+  renderDriverBar(); renderDriverManagerList();
+  document.getElementById('inpDriverNama').value = '';
+  document.getElementById('inpDriverHp').value = '';
+  document.getElementById('inpDriverUser').value = '';
+  document.getElementById('inpDriverPass').value = '';
+  showToast('Driver ditambahkan');
+}
+async function deleteDriver(id){
+  if(!confirm('Hapus akun driver ini?')) return;
+  drivers = drivers.filter(d=>d.id!==id);
+  await persistDrivers();
+  renderDriverBar(); renderDriverManagerList();
+  showToast('Driver dihapus');
+}
+
+// ================= Order creation sheet =================
+function myLinkedStore(){
+  if(session.role !== 'staff') return null;
+  return stores.find(s => s.id === session.storeId) || stores.find(s => s.nama === session.storeNama) || null;
+}
+
+function openSheet(){
+  document.getElementById('inpNominal').value = '';
+  document.getElementById('inpTujuan').value = '';
+  document.getElementById('inpNote').value = '';
+  document.getElementById('geoResults').innerHTML = '';
+  document.getElementById('geoPicked').innerHTML = '';
+  pickedGeo = null;
+
+  const linked = myLinkedStore();
+  pickedStore = linked || null;
+  renderStoreGrid();
+  setJenis('antar');
+  document.getElementById('sheetBackdrop').classList.add('open');
+}
+function closeSheet(){ document.getElementById('sheetBackdrop').classList.remove('open'); }
+function closeOnBackdrop(e){ if(e.target.id === 'sheetBackdrop') closeSheet(); }
+
+function setJenis(jenis){
+  currentJenis = jenis;
+  document.getElementById('btnAntar').classList.toggle('active', jenis==='antar');
+  document.getElementById('btnTarik').classList.toggle('active', jenis==='tarik');
+  document.getElementById('jenisHint').textContent = jenis==='antar' ? 'Antar cash ke toko yang butuh stok tunai.' : 'Tarik tunai dari bank/ATM untuk mengisi ulang stok kas.';
+
+  const linked = myLinkedStore();
+  const showLocked = jenis==='antar' && !!linked;
+  document.getElementById('storeLockedField').classList.toggle('hidden', !showLocked);
+  document.getElementById('storePickerField').classList.toggle('hidden', jenis!=='antar' || showLocked);
+  document.getElementById('addressField').classList.toggle('hidden', jenis!=='tarik');
+
+  if(showLocked){
+    document.getElementById('storeLockedDisplay').innerHTML = `
+      <div class="icon">🏪</div>
+      <div><div class="sn">${escapeHtml(linked.nama)}</div><div class="sub">${linked.driverNama ? '🛵 otomatis ke '+escapeHtml(linked.driverNama) : 'Belum ada driver tetap'}</div></div>`;
+  } else if(jenis==='antar'){
+    renderStoreGrid();
+  }
+}
+
+async function saveOrder(){
+  const nominal = parseInt(document.getElementById('inpNominal').value) || 0;
+  const catatan = document.getElementById('inpNote').value.trim();
+  if(nominal <= 0){ showToast('Isi nominal dulu, ya'); return; }
+
+  let tujuan, tujuanLat, tujuanLng, autoDriver = null;
+  if(currentJenis === 'antar'){
+    if(!pickedStore){ showToast('Pilih toko tujuan dulu, ya'); return; }
+    tujuan = pickedStore.nama; tujuanLat = pickedStore.lat||null; tujuanLng = pickedStore.lng||null;
+    if(pickedStore.driverNama && drivers.some(d=>d.nama===pickedStore.driverNama)) autoDriver = pickedStore.driverNama;
+  } else {
+    tujuan = document.getElementById('inpTujuan').value.trim();
+    if(!tujuan){ showToast('Isi lokasi bank/ATM tujuan dulu, ya'); return; }
+    tujuanLat = pickedGeo ? pickedGeo.lat : null; tujuanLng = pickedGeo ? pickedGeo.lng : null;
+  }
+
+  const now = Date.now();
+  const order = {
+    id: 'o'+now+Math.random().toString(36).slice(2,7),
+    jenis: currentJenis, nominal, tujuan, catatan, tujuanLat, tujuanLng,
+    dibuatOleh: session.nama, nominalAktual: null,
+    driver: autoDriver, status: autoDriver ? 'ditugaskan' : 'baru',
+    tsAssigned: autoDriver ? now : null, tsStarted: null, tsCompleted: null,
+    responseMenit: null, durasiMenit: null,
+    ts: now, tsUpdate: now
+  };
+  store.orders.push(order);
+  await persistOrders();
+  render(); renderFleetMap();
+  closeSheet();
+  showToast(autoDriver ? `Pesanan otomatis masuk ke ${autoDriver}` : 'Pesanan dibuat ke ' + tujuan);
+}
+
+// ================= Order list logic =================
+function getTabsForRole(){
+  if(session.role === 'driver') return [{id:'tersedia',label:'Tersedia'},{id:'punya-saya',label:'Pesanan Saya'},{id:'riwayat',label:'Riwayat'}];
+  return [{id:'semua',label:'Semua'},{id:'baru',label:'Baru'},{id:'proses',label:'Diproses'},{id:'selesai',label:'Selesai'}];
+}
+function switchTab(id){ activeTab = id; render(); }
+
+function filteredOrders(){
+  const all = [...store.orders].sort((a,b)=> b.ts - a.ts);
+  const nama = (session.nama||'').trim().toLowerCase();
+  if(session.role === 'driver'){
+    if(activeTab === 'tersedia') return all.filter(o => o.status === 'baru' && !o.driver);
+    if(activeTab === 'punya-saya') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='ditugaskan'||o.status==='diproses'));
+    if(activeTab === 'riwayat') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='selesai'||o.status==='batal'));
+    return all;
+  }
+  if(activeTab === 'baru') return all.filter(o=>o.status==='baru');
+  if(activeTab === 'proses') return all.filter(o=>o.status==='ditugaskan'||o.status==='diproses');
+  if(activeTab === 'selesai') return all.filter(o=>o.status==='selesai');
+  return all;
+}
+
+function renderSummary(){
+  const today = new Date().toDateString();
+  const todays = store.orders.filter(o => new Date(o.ts).toDateString() === today);
+  const pending = store.orders.filter(o => o.status==='baru'||o.status==='ditugaskan'||o.status==='diproses').length;
+  const antarTotal = todays.filter(o=>o.jenis==='antar').reduce((s,o)=>s+o.nominal,0);
+  const tarikTotal = todays.filter(o=>o.jenis==='tarik').reduce((s,o)=>s+o.nominal,0);
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="sum-card"><div class="sum-icon a">📦</div><div class="sum-label">Pesanan Hari Ini</div><div class="sum-val">${todays.length}</div></div>
+    <div class="sum-card"><div class="sum-icon b">⏱️</div><div class="sum-label">Sedang Berjalan</div><div class="sum-val">${pending}</div></div>
+    <div class="sum-card"><div class="sum-icon c">🚗</div><div class="sum-label">Antar Cash</div><div class="sum-val">${fmtRp(antarTotal)}</div></div>
+    <div class="sum-card"><div class="sum-icon d">🏦</div><div class="sum-label">Tarik Tunai</div><div class="sum-val">${fmtRp(tarikTotal)}</div></div>
+  `;
+}
+function renderTabs(){
+  const tabs = getTabsForRole();
+  document.getElementById('tabs').innerHTML = tabs.map(t => `<button class="tab ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
+}
+
+function renderDriverPerf(){
+  const wrap = document.getElementById('driverPerfWrap');
+  if(!wrap) return;
+  if(session.role !== 'owner'){ wrap.innerHTML = ''; return; }
+
+  const completed = store.orders.filter(o => o.status==='selesai' && o.durasiMenit!=null && o.driver);
+  if(!completed.length){ wrap.innerHTML = ''; return; }
+  const byDriver = {};
+  completed.forEach(o => {
+    const key = o.driver;
+    if(!byDriver[key]) byDriver[key] = { nama:key, count:0, total:0, totalResp:0, respCount:0 };
+    byDriver[key].count++;
+    byDriver[key].total += o.durasiMenit;
+    if(o.responseMenit!=null){ byDriver[key].totalResp += o.responseMenit; byDriver[key].respCount++; }
+  });
+  const rows = Object.values(byDriver)
+    .map(d => ({ ...d, avg: Math.round(d.total/d.count), avgResp: d.respCount ? Math.round(d.totalResp/d.respCount) : null }))
+    .sort((a,b) => (a.avgResp ?? a.avg) - (b.avgResp ?? b.avg))
+    .slice(0, 6);
+
+  wrap.innerHTML = `<div class="perf-card">
+    <div class="perf-title">📊 Performa Waktu Driver — Respon & Antar <span class="perf-lock">🔒 khusus Owner</span></div>
+    ${rows.map((d,i) => `
+      <div class="perf-row">
+        <div class="perf-rank">${i+1}</div>
+        <div class="perf-name">🛵 ${escapeHtml(d.nama)}<div class="perf-sub">${d.count} pesanan selesai · rata-rata antar ${formatElapsed(d.avg*60000)}</div></div>
+        <div class="perf-stat"><div class="n">${d.avgResp!=null ? formatElapsed(d.avgResp*60000) : '—'}</div><div class="s">respon</div></div>
+      </div>`).join('')}
+    <div class="store-manage-link" onclick="openPerfLog()">📋 Lihat log lengkap tiap transaksi</div>
+  </div>`;
+}
+// ================= Driver performance log (Owner only) =================
+function openPerfLog(){
+  if(session.role !== 'owner') return;
+  const sel = document.getElementById('perfLogFilter');
+  const driverNames = [...new Set(store.orders.filter(o=>o.driver).map(o=>o.driver))].sort();
+  sel.innerHTML = `<option value="">Semua driver</option>` + driverNames.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  renderPerfLog();
+  document.getElementById('perfLogSheetBackdrop').classList.add('open');
+}
+function closePerfLog(){ document.getElementById('perfLogSheetBackdrop').classList.remove('open'); }
+function closeOnPerfLogBackdrop(e){ if(e.target.id === 'perfLogSheetBackdrop') closePerfLog(); }
+
+function renderPerfLog(){
+  if(session.role !== 'owner') return;
+  const filterDriver = document.getElementById('perfLogFilter').value;
+  let rows = store.orders.filter(o => o.driver && (o.status==='selesai' || o.status==='diproses' || o.status==='ditugaskan'));
+  if(filterDriver) rows = rows.filter(o => o.driver === filterDriver);
+  rows = rows.sort((a,b) => b.ts - a.ts);
+
+  const wrap = document.getElementById('perfLogList');
+  if(!rows.length){ wrap.innerHTML = `<div class="store-empty">Belum ada transaksi tercatat untuk driver ini.</div>`; return; }
+
+  wrap.innerHTML = rows.map(o => {
+    const d = new Date(o.ts);
+    const timeStr = d.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    let metrics = '';
+    if(o.status==='selesai'){
+      metrics = `
+        ${o.responseMenit!=null ? `<div class="log-metric">Respon <b>${formatElapsed(o.responseMenit*60000)}</b></div>` : ''}
+        ${o.durasiMenit!=null ? `<div class="log-metric">Antar <b>${formatElapsed(o.durasiMenit*60000)}</b></div>` : ''}
+        <div class="log-metric">✓ Selesai</div>`;
+    } else if(o.status==='diproses'){
+      const startRef = o.tsStarted || o.ts;
+      metrics = `<div class="log-metric">🚗 Berjalan <b>${formatElapsed(Date.now()-startRef)}</b></div>`;
+    } else if(o.status==='ditugaskan'){
+      const startRef = o.tsAssigned || o.ts;
+      metrics = `<div class="log-metric">⏱ Menunggu <b>${formatElapsed(Date.now()-startRef)}</b></div>`;
+    }
+    return `
+      <div class="log-row">
+        <div class="log-row-top">
+          <div>
+            <div class="lt">🛵 ${escapeHtml(o.driver)} · ${o.jenis==='antar'?'🚗 Antar Cash':'🏦 Tarik Tunai'}</div>
+            <div class="lsub">${escapeHtml(o.tujuan)} · ${fmtRp(o.nominal)}${o.dibuatOleh ? ' · oleh '+escapeHtml(o.dibuatOleh) : ''}</div>
+          </div>
+          <div class="ltime">${timeStr}</div>
+        </div>
+        <div class="log-metrics">${metrics}</div>
+      </div>`;
+  }).join('');
+}
+
+function statusBadge(status){
+  const map = { baru:'Baru', ditugaskan:'Ditugaskan', diproses:'OTW', selesai:'Selesai', batal:'Dibatalkan' };
+  const dot = status==='diproses' ? '<span class="bdot"></span>' : '';
+  return `<span class="badge ${status}">${dot}${map[status]}</span>`;
+}
+
+function orderActions(o){
+  const nama = (session.nama||'').trim();
+  const namaLower = nama.toLowerCase();
+  let actions = '';
+  const canTrack = (o.status==='ditugaskan'||o.status==='diproses');
+
+  if(session.role === 'driver'){
+    if(o.status === 'baru' && !o.driver) actions += `<button class="act-btn primary" onclick="claimOrder('${o.id}')">Ambil Pesanan</button>`;
+    else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">Mulai Jalan</button>`;
+    else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='diproses') actions += `<button class="act-btn success" onclick="completeOrder('${o.id}')">Selesaikan</button>`;
+    if(canTrack) actions += `<button class="act-btn ghost" onclick="openTracking('${o.id}')">🗺️ Lihat Peta</button>`;
+    return actions ? `<div class="order-actions">${actions}</div>` : '';
+  }
+
+  if(o.status === 'baru'){
+    const options = drivers.length ? drivers.map(d=>`<option value="${escapeHtml(d.nama)}">${escapeHtml(d.nama)}</option>`).join('') : `<option value="">(belum ada driver terdaftar)</option>`;
+    actions += `<select class="act-select" id="assign-${o.id}"><option value="">Pilih driver...</option>${options}</select>
+    <button class="act-btn primary" onclick="assignDriver('${o.id}')">Tugaskan</button>`;
+  }
+  if(canTrack) actions += `<button class="act-btn track" onclick="openTracking('${o.id}')">🛰️ Lacak Live</button>`;
+  if(session.role === 'owner' && (o.status==='baru'||o.status==='ditugaskan')) actions += `<button class="act-btn danger" onclick="cancelOrder('${o.id}')">Batalkan</button>`;
+  return actions ? `<div class="order-actions">${actions}</div>` : '';
+}
+
+function render(){
+  renderSummary();
+  renderDriverPerf();
+  renderTabs();
+  const list = filteredOrders();
+  const wrap = document.getElementById('orderList');
+  if(list.length === 0){ wrap.innerHTML = `<div class="empty-state"><span class="big">📦</span>Belum ada pesanan di sini.</div>`; return; }
+  wrap.innerHTML = list.map(o => {
+    const d = new Date(o.ts);
+    const timeStr = d.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    const icon = o.jenis === 'antar' ? '🚗' : '🏦';
+    const jenisLabel = o.jenis === 'antar' ? 'Antar Cash' : 'Tarik Tunai';
+    let timerBadge = '';
+    if(o.status==='ditugaskan'){
+      const startRef = o.tsAssigned || o.ts;
+      timerBadge = `<span class="badge live-timer">⏱ Menunggu driver berangkat: ${formatElapsed(Date.now()-startRef)}</span>`;
+    } else if(o.status==='diproses'){
+      const startRef = o.tsStarted || o.ts;
+      timerBadge = `<span class="badge live-timer">🚗 ${formatElapsed(Date.now()-startRef)} di jalan</span>`;
+    } else if(o.status==='selesai' && o.durasiMenit!=null){
+      const respTxt = o.responseMenit!=null ? `Respon ${formatElapsed(o.responseMenit*60000)} · ` : '';
+      timerBadge = `<span class="badge durasi">✓ ${respTxt}Antar ${formatElapsed(o.durasiMenit*60000)}</span>`;
+    }
+    return `
+      <div class="order ${o.jenis}">
+        <div class="order-top">
+          <div class="order-icon">${icon}</div>
+          <div class="order-mid">
+            <div class="order-jenis">${jenisLabel}</div>
+            <div class="order-tujuan">${escapeHtml(o.tujuan || '(tanpa tujuan)')}</div>
+          </div>
+          <div class="order-right">
+            <div class="order-amount">${fmtRp(o.nominal)}</div>
+            <div class="order-time">${timeStr}</div>
+          </div>
+        </div>
+        <div class="order-badges">
+          ${statusBadge(o.status)}
+          ${timerBadge}
+          ${o.driver ? `<span class="badge driver">🛵 ${escapeHtml(o.driver)}</span>` : ''}
+          ${o.dibuatOleh ? `<span class="badge driver">oleh ${escapeHtml(o.dibuatOleh)}</span>` : ''}
+        </div>
+        ${o.catatan ? `<div class="order-note">"${escapeHtml(o.catatan)}"</div>` : ''}
+        ${o.status==='selesai' && o.nominalAktual ? `<div class="order-note">Nominal final: ${fmtRp(o.nominalAktual)}</div>` : ''}
+        ${orderActions(o)}
+      </div>`;
+  }).join('');
+}
+
+// ================= Order actions =================
+async function assignDriver(orderId){
+  const sel = document.getElementById('assign-'+orderId);
+  const val = sel ? sel.value : '';
+  if(!val){ showToast('Pilih driver dulu'); return; }
+  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  o.driver = val; o.status = 'ditugaskan'; o.tsAssigned = Date.now(); o.tsUpdate = Date.now();
+  await persistOrders(); render(); renderFleetMap(); showToast('Driver ditugaskan');
+}
+async function claimOrder(orderId){
+  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  o.driver = session.nama; o.status = 'ditugaskan'; o.tsAssigned = Date.now(); o.tsUpdate = Date.now();
+  await persistOrders(); render(); renderFleetMap(); showToast('Pesanan diambil');
+}
+async function startOrder(orderId){
+  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  const now = Date.now();
+  const respRef = o.tsAssigned || o.ts;
+  o.status = 'diproses'; o.tsStarted = now; o.responseMenit = Math.max(0, Math.round((now-respRef)/60000)); o.tsUpdate = now;
+  await persistOrders(); render(); renderFleetMap();
+  if(trackingOrderId===orderId) renderTracking(orderId, true);
+  showToast('Pesanan dalam perjalanan');
+}
+async function completeOrder(orderId){
+  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  const input = prompt('Nominal final yang diserahkan/ditarik (Rp):', o.nominal);
+  if(input === null) return;
+  const val = parseInt(input.replace(/\D/g,'')) || o.nominal;
+  const now = Date.now();
+  const startRef = o.tsStarted || o.tsAssigned || o.ts;
+  o.status = 'selesai'; o.nominalAktual = val; o.tsCompleted = now; o.durasiMenit = Math.max(1, Math.round((now-startRef)/60000)); o.tsUpdate = now;
+  await persistOrders(); render(); renderFleetMap();
+  if(trackingOrderId===orderId) closeTracking();
+  showToast('Pesanan selesai');
+}
+async function cancelOrder(orderId){
+  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  if(!confirm('Batalkan pesanan ini?')) return;
+  o.status = 'batal'; o.tsUpdate = Date.now();
+  await persistOrders(); render(); renderFleetMap();
+  showToast('Pesanan dibatalkan');
+}
+
+// ================= Fleet map =================
+function driverDivIcon(){ return L.divIcon({ className:'', html:'<div style="width:34px;height:34px;border-radius:50%;background:#00B14F;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff;">🛵</div>', iconSize:[34,34], iconAnchor:[17,17] }); }
+function destDivIcon(){ return L.divIcon({ className:'', html:'<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:#0B0F14;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.3);"><span style="transform:rotate(45deg);font-size:12px;">🎯</span></div>', iconSize:[28,28], iconAnchor:[14,28] }); }
+
+function initFleetMap(){
+  fleetMap = L.map('fleetMap', { zoomControl:false, attributionControl:true }).setView(DEFAULT_CENTER, 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(fleetMap);
+}
+
+function renderFleetMap(){
+  if(!fleetMap) return;
+  const now = Date.now();
+  const active = Object.values(locations).filter(l => now - l.ts < 15*60*1000);
+  document.getElementById('fleetCount').textContent = active.length + ' driver aktif';
+
+  const seen = new Set();
+  active.forEach(loc => {
+    const key = 'd_' + loc.name.toLowerCase();
+    seen.add(key);
+    if(fleetMarkers[key]){ fleetMarkers[key].setLatLng([loc.lat, loc.lng]); }
+    else { fleetMarkers[key] = L.marker([loc.lat, loc.lng], { icon: driverDivIcon() }).bindTooltip(loc.name, {direction:'top', offset:[0,-16]}).addTo(fleetMap); }
+  });
+  Object.keys(fleetMarkers).forEach(k => { if(k.startsWith('d_') && !seen.has(k)){ fleetMap.removeLayer(fleetMarkers[k]); delete fleetMarkers[k]; } });
+
+  const activeOrders = store.orders.filter(o => (o.status==='ditugaskan'||o.status==='diproses') && o.tujuanLat);
+  const seenDest = new Set();
+  activeOrders.forEach(o => {
+    const key = 'dest_' + o.id;
+    seenDest.add(key);
+    if(fleetMarkers[key]){ fleetMarkers[key].setLatLng([o.tujuanLat, o.tujuanLng]); }
+    else { fleetMarkers[key] = L.marker([o.tujuanLat, o.tujuanLng], { icon: destDivIcon() }).bindTooltip(o.tujuan, {direction:'top', offset:[0,-24]}).addTo(fleetMap); }
+  });
+  Object.keys(fleetMarkers).forEach(k => { if(k.startsWith('dest_') && !seenDest.has(k)){ fleetMap.removeLayer(fleetMarkers[k]); delete fleetMarkers[k]; } });
+
+  const allPts = [...active.map(l=>[l.lat,l.lng]), ...activeOrders.map(o=>[o.tujuanLat,o.tujuanLng])];
+  if(allPts.length) fleetMap.fitBounds(allPts, { padding:[30,30], maxZoom:14 });
+}
+
+// ================= Tracking modal =================
+function openTracking(orderId){
+  trackingOrderId = orderId;
+  document.getElementById('trackModal').classList.add('open');
+  setTimeout(() => {
+    if(!trackMap){
+      trackMap = L.map('trackMap', { zoomControl:false }).setView(DEFAULT_CENTER, 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(trackMap);
+    }
+    renderTracking(orderId, false);
+  }, 50);
+}
+function closeTracking(){
+  document.getElementById('trackModal').classList.remove('open');
+  trackingOrderId = null;
+  if(trackMap){ trackMap.remove(); trackMap = null; trackMarkers = {}; }
+}
+
+function renderTracking(orderId, silent){
+  const o = store.orders.find(x=>x.id===orderId);
+  if(!o){ closeTracking(); return; }
+  const driverLoc = o.driver ? locations[o.driver.toLowerCase()] : null;
+
+  if(trackMap){
+    const pts = [];
+    if(driverLoc){
+      if(!trackMarkers.driver) trackMarkers.driver = L.marker([driverLoc.lat, driverLoc.lng], {icon:driverDivIcon()}).addTo(trackMap);
+      else trackMarkers.driver.setLatLng([driverLoc.lat, driverLoc.lng]);
+      pts.push([driverLoc.lat, driverLoc.lng]);
+    }
+    if(o.tujuanLat){
+      if(!trackMarkers.dest) trackMarkers.dest = L.marker([o.tujuanLat, o.tujuanLng], {icon:destDivIcon()}).addTo(trackMap);
+      else trackMarkers.dest.setLatLng([o.tujuanLat, o.tujuanLng]);
+      pts.push([o.tujuanLat, o.tujuanLng]);
+    }
+    if(driverLoc && o.tujuanLat){
+      const line = [[driverLoc.lat, driverLoc.lng],[o.tujuanLat, o.tujuanLng]];
+      if(trackMarkers.line) trackMap.removeLayer(trackMarkers.line);
+      trackMarkers.line = L.polyline(line, { color:'#00B14F', weight:3, dashArray:'6,8' }).addTo(trackMap);
+    }
+    if(pts.length && !silent) trackMap.fitBounds(pts, { padding:[50,50], maxZoom:15 });
+    else if(pts.length===1) trackMap.setView(pts[0], 14);
+  }
+
+  if(driverLoc && o.tujuanLat){
+    const km = haversineKm(driverLoc.lat, driverLoc.lng, o.tujuanLat, o.tujuanLng);
+    document.getElementById('trackEta').textContent = etaMinutes(km) + ' menit';
+    document.getElementById('trackDist').textContent = km.toFixed(1) + ' km (jarak lurus)';
+  } else if(!driverLoc){
+    document.getElementById('trackEta').textContent = 'Menunggu GPS driver';
+    document.getElementById('trackDist').textContent = '—';
+  } else {
+    document.getElementById('trackEta').textContent = '—';
+    document.getElementById('trackDist').textContent = 'Titik tujuan belum ada koordinat';
+  }
+
+  const steps = [{l:'Baru'},{l:'Ditugaskan'},{l:'OTW'},{l:'Selesai'}];
+  const order_ = ['baru','ditugaskan','diproses','selesai'];
+  const curIdx = order_.indexOf(o.status);
+  document.getElementById('trackStepper').innerHTML = steps.map((s,i)=>{
+    let cls = '';
+    if(i < curIdx) cls = 'done'; else if(i === curIdx) cls = 'current';
+    return `<div class="step ${cls}"><div class="bar"></div><div class="circ">${i<curIdx?'✓':i+1}</div><div class="lbl">${s.l}</div></div>`;
+  }).join('');
+
+  const nama2 = (session.nama||'').trim();
+  let waktuRow = '';
+  if(o.status==='ditugaskan'){
+    const startRef = o.tsAssigned || o.ts;
+    waktuRow = `<div class="track-info-row"><span class="k">Menunggu Driver Berangkat</span><span class="v">⏱ ${formatElapsed(Date.now()-startRef)}</span></div>`;
+  } else if(o.status==='diproses'){
+    const startRef = o.tsStarted || o.ts;
+    waktuRow = `<div class="track-info-row"><span class="k">Sedang Di Jalan</span><span class="v">🚗 ${formatElapsed(Date.now()-startRef)}</span></div>`;
+  } else if(o.status==='selesai' && o.durasiMenit!=null){
+    const respTxt = o.responseMenit!=null ? `<div class="track-info-row"><span class="k">Waktu Respon</span><span class="v">🚦 ${formatElapsed(o.responseMenit*60000)}</span></div>` : '';
+    waktuRow = `${respTxt}<div class="track-info-row"><span class="k">Waktu Antar</span><span class="v">✓ ${formatElapsed(o.durasiMenit*60000)}</span></div>`;
+  }
+
+  document.getElementById('trackDetails').innerHTML = `
+    <div class="track-info-row"><span class="k">Jenis</span><span class="v">${o.jenis==='antar'?'🚗 Antar Cash':'🏦 Tarik Tunai'}</span></div>
+    <div class="track-info-row"><span class="k">Nominal</span><span class="v">${fmtRp(o.nominal)}</span></div>
+    <div class="track-info-row"><span class="k">Tujuan</span><span class="v" style="text-align:right;max-width:60%;">${escapeHtml(o.tujuan)}</span></div>
+    <div class="track-info-row"><span class="k">Driver</span><span class="v">${o.driver ? '🛵 '+escapeHtml(o.driver) : 'Belum ditugaskan'}</span></div>
+    ${waktuRow}
+    ${o.catatan ? `<div class="track-info-row"><span class="k">Catatan</span><span class="v">${escapeHtml(o.catatan)}</span></div>` : ''}
+  `;
+
+  const nama = (session.nama||'').trim().toLowerCase();
+  let actionsHtml = '';
+  if(session.role === 'driver' && o.driver && o.driver.toLowerCase()===nama){
+    if(o.status==='ditugaskan') actionsHtml = `<button class="act-btn primary" style="width:100%;" onclick="startOrder('${o.id}')">Mulai Jalan</button>`;
+    else if(o.status==='diproses') actionsHtml = `<button class="act-btn success" style="width:100%;" onclick="completeOrder('${o.id}')">Selesaikan Pesanan</button>`;
+  } else {
+    actionsHtml = `<button class="act-btn ghost" style="width:100%;" onclick="closeTracking()">Tutup</button>`;
+  }
+  document.getElementById('trackActions').innerHTML = actionsHtml;
+}
+
+boot();
+</script>
+</body>
+</html>

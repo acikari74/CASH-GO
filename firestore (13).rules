@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Aturan minimal: hanya klien yang sudah sign-in (termasuk anonim) yang boleh
+// baca/tulis. Ini MENCEGAH bot/scraper acak mengakses Firestore langsung,
+// TAPI TIDAK melindungi dari orang yang membuka aplikasi ini sendiri —
+// karena aplikasi otomatis sign-in anonim untuk semua pengunjung.
+//
+// PENTING: username & password di aplikasi ini disimpan APA ADANYA
+// (tanpa hash/enkripsi) di dalam dokumen Firestore. Siapa pun yang berhasil
+// membuka koleksi "meta" bisa melihat semua kredensial & data transaksi.
+// Cocok untuk tim internal kecil yang saling percaya — BUKAN untuk data
+// yang benar-benar sensitif (PIN rekening, OTP, dsb).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /meta/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
