@@ -316,7 +316,7 @@
 
       <div class="field">
         <label>Nominal (Rp)</label>
-        <input type="number" id="inpNominal" placeholder="0" inputmode="numeric">
+        <input type="text" id="inpNominal" placeholder="0" inputmode="numeric" oninput="formatNominalInput(this)">
       </div>
 
       <div class="field" id="storePickerField">
@@ -470,6 +470,10 @@ let trackMarkers = {};
 let trackingOrderId = null;
 
 function fmtRp(n){ n = Math.round(n||0); return 'Rp ' + n.toLocaleString('id-ID'); }
+function formatNominalInput(el){
+  const digits = el.value.replace(/\D/g,'');
+  el.value = digits ? parseInt(digits,10).toLocaleString('id-ID') : '';
+}
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1700); }
 
@@ -679,6 +683,7 @@ function enterApp(){
   document.getElementById('manageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('driverManageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('mapCardWrap').classList.toggle('hidden', session.role==='driver');
+  activeTab = session.role==='driver' ? 'tersedia' : 'semua';
 
   if(session.role!=='driver'){
     if(!fleetMap) initFleetMap();
@@ -907,7 +912,7 @@ function setJenis(jenis){
 }
 
 async function saveOrder(){
-  const nominal = parseInt(document.getElementById('inpNominal').value) || 0;
+  const nominal = parseInt(document.getElementById('inpNominal').value.replace(/\D/g,'')) || 0;
   const catatan = document.getElementById('inpNote').value.trim();
   if(nominal <= 0){ showToast('Isi nominal dulu, ya'); return; }
   if(!pickedStore){ showToast('Pilih toko dulu, ya'); return; }
@@ -946,10 +951,9 @@ function filteredOrders(){
   const all = [...store.orders].sort((a,b)=> b.ts - a.ts);
   const nama = (session.nama||'').trim().toLowerCase();
   if(session.role === 'driver'){
-    if(activeTab === 'tersedia') return all.filter(o => o.status === 'baru' && !o.driver);
     if(activeTab === 'punya-saya') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='ditugaskan'||o.status==='diproses'));
     if(activeTab === 'riwayat') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='selesai'||o.status==='batal'));
-    return all;
+    return all.filter(o => o.status === 'baru' && !o.driver); // default: 'tersedia'
   }
   if(activeTab === 'baru') return all.filter(o=>o.status==='baru');
   if(activeTab === 'proses') return all.filter(o=>o.status==='ditugaskan'||o.status==='diproses');
