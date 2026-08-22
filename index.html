@@ -279,14 +279,6 @@
   </div>
 
   <div class="wrap lift">
-    <div class="share-toggle hidden" id="shareToggleWrap">
-      <div>
-        <div class="lbl">Bagikan Lokasi Live</div>
-        <div class="sub" id="shareSub">Nonaktif — lokasi tidak terlihat driver lain</div>
-      </div>
-      <div class="switch" id="shareSwitch" onclick="toggleShareLocation()"><div class="dot"></div></div>
-    </div>
-
     <div class="manage-bar hidden" id="manageBarWrap" onclick="openStoreManager()">
       <div><div class="lbl">🏬 Kelola Daftar Toko</div><div class="sub" id="storeCountSub">0 toko tersimpan</div></div>
       <div class="chev">›</div>
@@ -296,7 +288,7 @@
       <div class="chev">›</div>
     </div>
 
-    <div class="map-card">
+    <div class="map-card" id="mapCardWrap">
       <div class="map-badge"><span class="live-dot"></span>LIVE</div>
       <div class="map-count" id="fleetCount">0 driver aktif</div>
       <div id="fleetMap"></div>
@@ -684,37 +676,26 @@ function enterApp(){
   document.getElementById('userChipRole').textContent = session.role==='owner'?'Owner':session.role==='staff'?'Staff Toko':'Driver';
 
   document.getElementById('fab').classList.toggle('hidden', session.role==='driver');
-  document.getElementById('shareToggleWrap').classList.toggle('hidden', session.role!=='driver');
   document.getElementById('manageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('driverManageBarWrap').classList.toggle('hidden', session.role!=='owner');
+  document.getElementById('mapCardWrap').classList.toggle('hidden', session.role==='driver');
 
-  updateShareToggleUI();
-  if(!fleetMap) initFleetMap();
+  if(session.role!=='driver'){
+    if(!fleetMap) initFleetMap();
+    renderFleetMap();
+  }
   render();
-  renderFleetMap();
   renderStoreBar();
   renderDriverBar();
 
-  if(session.role==='driver' && session.shareLocation) startWatching();
+  if(session.role==='driver') startWatching();
   setupRealtimeListeners();
 }
 
-// ================= Geolocation sharing =================
-function updateShareToggleUI(){
-  const sw = document.getElementById('shareSwitch');
-  sw.classList.toggle('on', !!session.shareLocation);
-  document.getElementById('shareSub').textContent = session.shareLocation
-    ? 'Aktif — owner & staff bisa lihat lokasi kamu'
-    : 'Nonaktif — lokasi tidak terlihat driver lain';
-}
-function toggleShareLocation(){
-  session.shareLocation = !session.shareLocation;
-  updateShareToggleUI();
-  persistSession();
-  if(session.shareLocation) startWatching(); else stopWatching();
-}
+// ================= Geolocation sharing (otomatis untuk driver, tanpa toggle) =================
 function startWatching(){
-  if(!navigator.geolocation){ showToast('Perangkat tidak mendukung GPS'); session.shareLocation=false; updateShareToggleUI(); return; }
+  if(!navigator.geolocation){ showToast('Perangkat tidak mendukung GPS'); return; }
+  if(watchId !== null) return;
   watchId = navigator.geolocation.watchPosition(
     pos => {
       const now = Date.now();
@@ -724,10 +705,9 @@ function startWatching(){
       if(!key) return;
       locations[key] = { name: session.nama.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude, ts: now };
       persistLocations();
-      renderFleetMap();
       if(trackingOrderId) renderTracking(trackingOrderId, true);
     },
-    err => { showToast('Gagal ambil lokasi: izin GPS ditolak'); session.shareLocation=false; updateShareToggleUI(); persistSession(); },
+    err => { showToast('Lokasi tidak bisa diakses — pastikan izin GPS diaktifkan di browser'); },
     { enableHighAccuracy:true, maximumAge:4000, timeout:12000 }
   );
 }
@@ -1094,7 +1074,6 @@ function orderActions(o){
     if(o.status === 'baru' && !o.driver) actions += `<button class="act-btn primary" onclick="claimOrder('${o.id}')">Ambil Pesanan</button>`;
     else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">Mulai Jalan</button>`;
     else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='diproses') actions += `<button class="act-btn success" onclick="completeOrder('${o.id}')">Selesaikan</button>`;
-    if(canTrack) actions += `<button class="act-btn ghost" onclick="openTracking('${o.id}')">🗺️ Lihat Peta</button>`;
     return actions ? `<div class="order-actions">${actions}</div>` : '';
   }
 
@@ -1238,8 +1217,9 @@ function renderFleetMap(){
   if(allPts.length) fleetMap.fitBounds(allPts, { padding:[30,30], maxZoom:14 });
 }
 
-// ================= Tracking modal =================
+// ================= Tracking modal (khusus Owner & Staff) =================
 function openTracking(orderId){
+  if(session.role === 'driver') return;
   trackingOrderId = orderId;
   document.getElementById('trackModal').classList.add('open');
   setTimeout(() => {
