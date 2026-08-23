@@ -552,7 +552,8 @@ async function requestNotifPermission(){
 
   try{
     const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
-    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    const readyReg = await navigator.serviceWorker.ready; // tunggu sampai benar-benar aktif
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: readyReg || reg });
     if(token && session.role === 'driver' && session.nama){
       const key = session.nama.trim().toLowerCase();
       await TOKENS.doc(key).set({ token, nama: session.nama, updatedAt: Date.now() });
