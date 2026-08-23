@@ -664,9 +664,8 @@ async function requestNotifPermission(){
     const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
     const readyReg = await navigator.serviceWorker.ready; // tunggu sampai benar-benar aktif
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: readyReg || reg });
-    if(token && session.role === 'driver' && session.nama){
-      const key = session.nama.trim().toLowerCase();
-      await TOKENS.doc(key).set({ token, nama: session.nama, updatedAt: Date.now() });
+    if(token && session.role === 'driver' && session.driverId){
+      await TOKENS.doc(session.driverId).set({ token, nama: session.nama, updatedAt: Date.now() });
     }
   }catch(e){
     console.warn('FCM token gagal disiapkan:', e);
@@ -822,9 +821,9 @@ function setupRealtimeListeners(){
     const newStore = snap.exists ? snap.data() : { orders: [] };
     if(!newStore.orders) newStore.orders = [];
 
-    if(session.loggedIn && session.role === 'driver'){
-      const nama = (session.nama||'').trim().toLowerCase();
-      const currentAssigned = newStore.orders.filter(o => o.driver && o.driver.toLowerCase()===nama && o.status==='ditugaskan');
+    if(session.loggedIn && session.role === 'driver' && session.driverId){
+      const myId = session.driverId;
+      const currentAssigned = newStore.orders.filter(o => o.driverId === myId && o.status==='ditugaskan');
       if(!ordersListenerFirstRun){
         const freshOnes = currentAssigned.filter(o => !knownAssignedOrderIds.has(o.id));
         freshOnes.forEach(o => notifyNewOrder(o));
@@ -968,7 +967,7 @@ async function loginDriver(){
   const acc = drivers.find(a => a.username===user && a.password===pass);
   if(!acc){ loginErr('Username atau password salah, atau akun belum didaftarkan Owner.'); return; }
   warmUpNotifAudio();
-  session = { loggedIn:true, role:'driver', nama:acc.nama, username:user, shareLocation:false };
+  session = { loggedIn:true, role:'driver', nama:acc.nama, driverId:acc.id, username:user, shareLocation:false };
   await persistSession();
   knownAssignedOrderIds = new Set();
   ordersListenerFirstRun = true;
@@ -1024,9 +1023,9 @@ function startWatching(){
       const now = Date.now();
       if(now - lastSentTs < 4000) return;
       lastSentTs = now;
-      const key = (session.nama||'').trim().toLowerCase();
+      const key = session.driverId;
       if(!key) return;
-      locations[key] = { name: session.nama.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude, ts: now };
+      locations[key] = { name: (session.nama||'').trim(), lat: pos.coords.latitude, lng: pos.coords.longitude, ts: now };
       persistLocations();
       if(trackingOrderId) renderTracking(trackingOrderId, true);
     },
@@ -1041,7 +1040,7 @@ function renderStoreBar(){ const sub=document.getElementById('storeCountSub'); i
 function fillStoreDriverSelect(){
   const sel = document.getElementById('inpStoreDriver');
   if(!sel) return;
-  const options = drivers.map(d=>`<option value="${escapeHtml(d.nama)}">${escapeHtml(d.nama)}</option>`).join('');
+  const options = drivers.map(d=>`<option value="${escapeHtml(d.id)}">${escapeHtml(d.nama)}</option>`).join('');
   sel.innerHTML = `<option value="">Belum ditentukan (tugaskan manual nanti)</option>${options}`;
 }
 function openStoreManager(){
@@ -1061,7 +1060,7 @@ function closeOnStoreBackdrop(e){ if(e.target.id === 'storeSheetBackdrop') close
 function renderStoreManagerList(){
   const wrap = document.getElementById('storeListWrap');
   if(!stores.length){ wrap.innerHTML = `<div class="store-empty">Belum ada toko. Tambahkan di bawah.</div>`; return; }
-  const driverOptions = drivers.map(d=>`<option value="${escapeHtml(d.nama)}">${escapeHtml(d.nama)}</option>`).join('');
+  const driverOptions = drivers.map(d=>`<option value="${escapeHtml(d.id)}">${escapeHtml(d.nama)}</option>`).join('');
   wrap.innerHTML = stores.map(s => `
     <div class="store-list-item" style="align-items:flex-start;flex-direction:column;gap:8px;">
       <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
@@ -1075,15 +1074,16 @@ function renderStoreManagerList(){
     </div>`).join('');
   wrap.querySelectorAll('select[data-store-id]').forEach(sel => {
     const s = stores.find(x=>x.id===sel.getAttribute('data-store-id'));
-    if(s && s.driverNama) sel.value = s.driverNama;
+    if(s && s.driverId) sel.value = s.driverId;
   });
 }
-async function assignStoreDriver(storeId, driverNama){
+async function assignStoreDriver(storeId, driverId){
   const s = stores.find(x=>x.id===storeId); if(!s) return;
-  s.driverNama = driverNama || null;
+  const d = drivers.find(x=>x.id===driverId);
+  s.driverId = driverId || null;
   await persistStores();
   renderStoreGrid();
-  showToast(driverNama ? `${s.nama} sekarang ditangani ${driverNama}` : `Driver tetap ${s.nama} dihapus`);
+  showToast(d ? `${s.nama} sekarang ditangani ${d.nama}` : `Driver tetap ${s.nama} dihapus`);
 }
 async function searchStoreLocation(){
   const q = document.getElementById('inpStoreAlamat').value.trim() || document.getElementById('inpStoreNama').value.trim();
@@ -1107,12 +1107,12 @@ function pickStoreGeo(r){
 async function addStore(){
   const nama = document.getElementById('inpStoreNama').value.trim();
   const alamat = document.getElementById('inpStoreAlamat').value.trim();
-  const driverNama = document.getElementById('inpStoreDriver').value;
+  const driverId = document.getElementById('inpStoreDriver').value;
   const user = document.getElementById('inpStoreUser').value.trim();
   const pass = document.getElementById('inpStorePass').value.trim();
   if(!nama){ showToast('Isi nama toko dulu'); return; }
   if(user && stores.some(s=>s.username && s.username.toLowerCase()===user.toLowerCase())){ showToast('Username sudah dipakai toko lain'); return; }
-  const s = { id:'s'+Date.now()+Math.random().toString(36).slice(2,6), nama, alamat, lat: pickedStoreGeo?pickedStoreGeo.lat:null, lng: pickedStoreGeo?pickedStoreGeo.lng:null, driverNama: driverNama||null, username: user||null, password: pass||null };
+  const s = { id:'s'+Date.now()+Math.random().toString(36).slice(2,6), nama, alamat, lat: pickedStoreGeo?pickedStoreGeo.lat:null, lng: pickedStoreGeo?pickedStoreGeo.lng:null, driverId: driverId||null, username: user||null, password: pass||null };
   stores.push(s);
   await persistStores();
   renderStoreBar(); renderStoreManagerList(); renderStoreGrid();
@@ -1136,11 +1136,14 @@ function renderStoreGrid(){
   const grid = document.getElementById('storeGrid');
   if(!grid) return;
   if(!stores.length){ grid.innerHTML = `<div class="store-empty">Belum ada toko tersimpan. Minta Owner menambahkan dulu.</div>`; return; }
-  grid.innerHTML = stores.map(s => `
+  grid.innerHTML = stores.map(s => {
+    const drv = s.driverId ? drivers.find(d=>d.id===s.driverId) : null;
+    return `
     <button type="button" class="store-chip ${pickedStore && pickedStore.id===s.id ? 'active':''}" onclick="selectStore('${s.id}')">
       <div class="sn">${escapeHtml(s.nama)}</div>
-      <div class="sa">${s.driverNama ? '🛵 '+escapeHtml(s.driverNama) : 'Belum ada driver tetap'}</div>
-    </button>`).join('');
+      <div class="sa">${drv ? '🛵 '+escapeHtml(drv.nama) : 'Belum ada driver tetap'}</div>
+    </button>`;
+  }).join('');
 }
 function selectStore(id){ pickedStore = stores.find(s=>s.id===id) || null; renderStoreGrid(); }
 
@@ -1243,9 +1246,10 @@ function setJenis(jenis){
   document.getElementById('storePickerField').classList.toggle('hidden', showLocked);
 
   if(showLocked){
+    const drv = linked.driverId ? drivers.find(d=>d.id===linked.driverId) : null;
     document.getElementById('storeLockedDisplay').innerHTML = `
       <div class="icon">🏪</div>
-      <div><div class="sn">${escapeHtml(linked.nama)}</div><div class="sub">${linked.driverNama ? '🛵 otomatis ke '+escapeHtml(linked.driverNama) : 'Belum ada driver tetap'}</div></div>`;
+      <div><div class="sn">${escapeHtml(linked.nama)}</div><div class="sub">${drv ? '🛵 otomatis ke '+escapeHtml(drv.nama) : 'Belum ada driver tetap'}</div></div>`;
   } else {
     renderStoreGrid();
   }
@@ -1260,8 +1264,11 @@ async function saveOrder(){
   const tujuan = pickedStore.nama;
   const tujuanLat = pickedStore.lat || null;
   const tujuanLng = pickedStore.lng || null;
-  let autoDriver = null;
-  if(pickedStore.driverNama && drivers.some(d=>d.nama===pickedStore.driverNama)) autoDriver = pickedStore.driverNama;
+  let autoDriverId = null, autoDriverNama = null;
+  if(pickedStore.driverId){
+    const d = drivers.find(x=>x.id===pickedStore.driverId);
+    if(d){ autoDriverId = d.id; autoDriverNama = d.nama; }
+  }
 
   const now = Date.now();
   const kodeUnik = String(Math.floor(1000 + Math.random()*9000)); // 4 digit acak, unik per pesanan
@@ -1269,8 +1276,8 @@ async function saveOrder(){
     id: 'o'+now+Math.random().toString(36).slice(2,7),
     jenis: currentJenis, nominal, tujuan, catatan, tujuanLat, tujuanLng,
     dibuatOleh: session.nama, nominalAktual: null, kodeUnik,
-    driver: autoDriver, status: autoDriver ? 'ditugaskan' : 'baru',
-    tsAssigned: autoDriver ? now : null, tsStarted: null, tsCompleted: null,
+    driverId: autoDriverId, driverNama: autoDriverNama, status: autoDriverId ? 'ditugaskan' : 'baru',
+    tsAssigned: autoDriverId ? now : null, tsStarted: null, tsCompleted: null,
     responseMenit: null, durasiMenit: null, cancelReason: null, canceledBy: null,
     ts: now, tsUpdate: now
   };
@@ -1278,7 +1285,7 @@ async function saveOrder(){
   await persistOrders();
   render(); renderFleetMap();
   closeSheet();
-  showToast(autoDriver ? `Pesanan masuk ke ${autoDriver} — kode selesai: ${kodeUnik}` : 'Pesanan dibuat ke ' + tujuan);
+  showToast(autoDriverId ? `Pesanan masuk ke ${autoDriverNama} — kode selesai: ${kodeUnik}` : 'Pesanan dibuat ke ' + tujuan);
 }
 
 // ================= Order list logic =================
@@ -1302,10 +1309,11 @@ function matchesHistDate(o){
 
 function filteredOrders(){
   const all = [...store.orders].sort((a,b)=> b.ts - a.ts);
-  const nama = (session.nama||'').trim().toLowerCase();
   if(session.role === 'driver'){
-    if(activeTab === 'riwayat') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='selesai'||o.status==='batal')).filter(matchesHistDate);
-    return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='ditugaskan'||o.status==='diproses')); // default: 'punya-saya'
+    const myId = session.driverId;
+    if(!myId) return [];
+    if(activeTab === 'riwayat') return all.filter(o => o.driverId === myId && (o.status==='selesai'||o.status==='batal')).filter(matchesHistDate);
+    return all.filter(o => o.driverId === myId && (o.status==='ditugaskan'||o.status==='diproses')); // default: 'punya-saya'
   }
   if(activeTab === 'baru') return all.filter(o=>o.status==='baru');
   if(activeTab === 'proses') return all.filter(o=>o.status==='ditugaskan'||o.status==='diproses');
@@ -1336,12 +1344,12 @@ function renderDriverPerf(){
   if(!wrap) return;
   if(session.role !== 'owner'){ wrap.innerHTML = ''; return; }
 
-  const completed = store.orders.filter(o => o.status==='selesai' && o.durasiMenit!=null && o.driver);
+  const completed = store.orders.filter(o => o.status==='selesai' && o.durasiMenit!=null && o.driverId);
   if(!completed.length){ wrap.innerHTML = ''; return; }
   const byDriver = {};
   completed.forEach(o => {
-    const key = o.driver;
-    if(!byDriver[key]) byDriver[key] = { nama:key, count:0, total:0, totalResp:0, respCount:0 };
+    const key = o.driverId;
+    if(!byDriver[key]) byDriver[key] = { nama:o.driverNama||'(tanpa nama)', count:0, total:0, totalResp:0, respCount:0 };
     byDriver[key].count++;
     byDriver[key].total += o.durasiMenit;
     if(o.responseMenit!=null){ byDriver[key].totalResp += o.responseMenit; byDriver[key].respCount++; }
@@ -1366,8 +1374,13 @@ function renderDriverPerf(){
 function openPerfLog(){
   if(session.role !== 'owner') return;
   const sel = document.getElementById('perfLogFilter');
-  const driverNames = [...new Set(store.orders.filter(o=>o.driver).map(o=>o.driver))].sort();
-  sel.innerHTML = `<option value="">Semua driver</option>` + driverNames.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  const ids = [...new Set(store.orders.filter(o=>o.driverId).map(o=>o.driverId))];
+  const options = ids.map(id => {
+    const d = drivers.find(x=>x.id===id);
+    const label = d ? d.nama : (store.orders.find(o=>o.driverId===id)?.driverNama || id);
+    return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+  }).sort((a,b)=>a.localeCompare(b));
+  sel.innerHTML = `<option value="">Semua driver</option>` + options.join('');
   renderPerfLog();
   document.getElementById('perfLogSheetBackdrop').classList.add('open');
 }
@@ -1376,9 +1389,9 @@ function closeOnPerfLogBackdrop(e){ if(e.target.id === 'perfLogSheetBackdrop') c
 
 function renderPerfLog(){
   if(session.role !== 'owner') return;
-  const filterDriver = document.getElementById('perfLogFilter').value;
-  let rows = store.orders.filter(o => o.driver && (o.status==='selesai' || o.status==='diproses' || o.status==='ditugaskan'));
-  if(filterDriver) rows = rows.filter(o => o.driver === filterDriver);
+  const filterDriverId = document.getElementById('perfLogFilter').value;
+  let rows = store.orders.filter(o => o.driverId && (o.status==='selesai' || o.status==='diproses' || o.status==='ditugaskan'));
+  if(filterDriverId) rows = rows.filter(o => o.driverId === filterDriverId);
   rows = rows.sort((a,b) => b.ts - a.ts);
 
   const wrap = document.getElementById('perfLogList');
@@ -1404,7 +1417,7 @@ function renderPerfLog(){
       <div class="log-row">
         <div class="log-row-top">
           <div>
-            <div class="lt">🛵 ${escapeHtml(o.driver)} · ${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</div>
+            <div class="lt">🛵 ${escapeHtml(o.driverNama||'-')} · ${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</div>
             <div class="lsub">${escapeHtml(o.tujuan)} · ${fmtRp(o.nominal)}${o.dibuatOleh ? ' · oleh '+escapeHtml(o.dibuatOleh) : ''}</div>
           </div>
           <div class="ltime">${timeStr}</div>
@@ -1421,19 +1434,18 @@ function statusBadge(status){
 }
 
 function orderActions(o){
-  const nama = (session.nama||'').trim();
-  const namaLower = nama.toLowerCase();
   let actions = '';
   const canTrack = (o.status==='ditugaskan'||o.status==='diproses');
 
   if(session.role === 'driver'){
-    if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">✓ Terima Pesanan</button>`;
-    else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='diproses') actions += `<button class="act-btn success" onclick="openCompleteSheet('${o.id}')">Selesaikan</button>`;
+    const myId = session.driverId;
+    if(o.driverId === myId && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">✓ Terima Pesanan</button>`;
+    else if(o.driverId === myId && o.status==='diproses') actions += `<button class="act-btn success" onclick="openCompleteSheet('${o.id}')">Selesaikan</button>`;
     return actions ? `<div class="order-actions">${actions}</div>` : '';
   }
 
   if(o.status === 'baru'){
-    const options = drivers.length ? drivers.map(d=>`<option value="${escapeHtml(d.nama)}">${escapeHtml(d.nama)}</option>`).join('') : `<option value="">(belum ada driver terdaftar)</option>`;
+    const options = drivers.length ? drivers.map(d=>`<option value="${escapeHtml(d.id)}">${escapeHtml(d.nama)}</option>`).join('') : `<option value="">(belum ada driver terdaftar)</option>`;
     actions += `<select class="act-select" id="assign-${o.id}"><option value="">Pilih driver...</option>${options}</select>
     <button class="act-btn primary" onclick="assignDriver('${o.id}')">Tugaskan</button>`;
   }
@@ -1495,7 +1507,7 @@ function render(){
         <div class="order-badges">
           ${statusBadge(o.status)}
           ${timerBadge}
-          ${o.driver ? `<span class="badge driver">🛵 ${escapeHtml(o.driver)}</span>` : ''}
+          ${o.driverId ? `<span class="badge driver">🛵 ${escapeHtml(o.driverNama||'-')}</span>` : ''}
           ${o.dibuatOleh ? `<span class="badge driver">oleh ${escapeHtml(o.dibuatOleh)}</span>` : ''}
         </div>
         ${o.catatan ? `<div class="order-note">"${escapeHtml(o.catatan)}"</div>` : ''}
@@ -1511,8 +1523,10 @@ async function assignDriver(orderId){
   const sel = document.getElementById('assign-'+orderId);
   const val = sel ? sel.value : '';
   if(!val){ showToast('Pilih driver dulu'); return; }
+  const d = drivers.find(x=>x.id===val);
+  if(!d){ showToast('Driver tidak ditemukan'); return; }
   const o = store.orders.find(x=>x.id===orderId); if(!o) return;
-  o.driver = val; o.status = 'ditugaskan'; o.tsAssigned = Date.now(); o.tsUpdate = Date.now();
+  o.driverId = d.id; o.driverNama = d.nama; o.status = 'ditugaskan'; o.tsAssigned = Date.now(); o.tsUpdate = Date.now();
   await persistOrders(); render(); renderFleetMap(); showToast('Driver ditugaskan');
 }
 async function startOrder(orderId){
@@ -1614,12 +1628,12 @@ function initFleetMap(){
 function renderFleetMap(){
   if(!fleetMap) return;
   const now = Date.now();
-  const active = Object.values(locations).filter(l => now - l.ts < 15*60*1000);
-  document.getElementById('fleetCount').textContent = active.length + ' driver aktif';
+  const activeEntries = Object.entries(locations).filter(([id,l]) => now - l.ts < 15*60*1000);
+  document.getElementById('fleetCount').textContent = activeEntries.length + ' driver aktif';
 
   const seen = new Set();
-  active.forEach(loc => {
-    const key = 'd_' + loc.name.toLowerCase();
+  activeEntries.forEach(([driverId, loc]) => {
+    const key = 'd_' + driverId;
     seen.add(key);
     if(fleetMarkers[key]){ fleetMarkers[key].setLatLng([loc.lat, loc.lng]); }
     else { fleetMarkers[key] = L.marker([loc.lat, loc.lng], { icon: driverDivIcon() }).bindTooltip(loc.name, {direction:'top', offset:[0,-16]}).addTo(fleetMap); }
@@ -1636,7 +1650,7 @@ function renderFleetMap(){
   });
   Object.keys(fleetMarkers).forEach(k => { if(k.startsWith('dest_') && !seenDest.has(k)){ fleetMap.removeLayer(fleetMarkers[k]); delete fleetMarkers[k]; } });
 
-  const allPts = [...active.map(l=>[l.lat,l.lng]), ...activeOrders.map(o=>[o.tujuanLat,o.tujuanLng])];
+  const allPts = [...activeEntries.map(([id,l])=>[l.lat,l.lng]), ...activeOrders.map(o=>[o.tujuanLat,o.tujuanLng])];
   if(allPts.length) fleetMap.fitBounds(allPts, { padding:[30,30], maxZoom:14 });
 }
 
@@ -1662,7 +1676,7 @@ function closeTracking(){
 function renderTracking(orderId, silent){
   const o = store.orders.find(x=>x.id===orderId);
   if(!o){ closeTracking(); return; }
-  const driverLoc = o.driver ? locations[o.driver.toLowerCase()] : null;
+  const driverLoc = o.driverId ? locations[o.driverId] : null;
 
   if(trackMap){
     const pts = [];
@@ -1723,7 +1737,7 @@ function renderTracking(orderId, silent){
     <div class="track-info-row"><span class="k">Jenis</span><span class="v">${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</span></div>
     <div class="track-info-row"><span class="k">Nominal</span><span class="v">${fmtRp(o.nominal)}</span></div>
     <div class="track-info-row"><span class="k">Tujuan</span><span class="v" style="text-align:right;max-width:60%;">${escapeHtml(o.tujuan)}</span></div>
-    <div class="track-info-row"><span class="k">Driver</span><span class="v">${o.driver ? '🛵 '+escapeHtml(o.driver) : 'Belum ditugaskan'}</span></div>
+    <div class="track-info-row"><span class="k">Driver</span><span class="v">${o.driverId ? '🛵 '+escapeHtml(o.driverNama||'-') : 'Belum ditugaskan'}</span></div>
     ${waktuRow}
     ${o.catatan ? `<div class="track-info-row"><span class="k">Catatan</span><span class="v">${escapeHtml(o.catatan)}</span></div>` : ''}
   `;
