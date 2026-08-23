@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
 <style>
   :root{
     --bg:#F3F5F7; --dark:#0B0F14; --dark2:#161C24;
@@ -147,6 +148,8 @@
   .perf-stat .s{font-size:10px;color:var(--ink-soft);}
 
   .order-note{font-size:12px;color:var(--ink-soft);margin-top:9px;font-style:italic;}
+  .nudge-banner{background:var(--red-soft);color:var(--red);font-size:12px;font-weight:700;padding:9px 12px;border-radius:10px;margin-top:11px;animation:nudgepulse 1.6s infinite;}
+  @keyframes nudgepulse{0%,100%{opacity:1;}50%{opacity:.6;}}
 
   .order-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
   .act-btn{flex:1;min-width:100px;padding:10px;border-radius:10px;border:none;font-size:12.5px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
@@ -466,6 +469,12 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 const META = db.collection('meta');
+const TOKENS = db.collection('tokens');
+
+// GANTI dengan VAPID key dari: Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
+const VAPID_KEY = "BKzbdt295eZplnubGcbxXLes579gVjpV-65cUtxwobNjbTmnrxPfhqurOrfQd7eQy_xxmlIlz04nR6WngYpBoHk";
+let messaging = null;
+try{ messaging = firebase.messaging(); }catch(e){ /* browser tidak mendukung FCM (mis. Safari lama) */ }
 
 const SESSION_KEY = 'brilink-cash-session'; // localStorage key (lokal per perangkat, aman disimpan di browser)
 const DEFAULT_CENTER = [3.5952, 98.6722]; // Medan
@@ -493,6 +502,10 @@ let trackMap = null;
 let trackMarkers = {};
 let trackingOrderId = null;
 
+let knownAssignedOrderIds = new Set();
+let ordersListenerFirstRun = true;
+let notifAudioCtx = null;
+
 function fmtRp(n){ n = Math.round(n||0); return 'Rp ' + n.toLocaleString('id-ID'); }
 function formatNominalInput(el){
   const digits = el.value.replace(/\D/g,'');
@@ -500,6 +513,74 @@ function formatNominalInput(el){
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1700); }
+
+function warmUpNotifAudio(){
+  try{
+    if(!notifAudioCtx) notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
+  }catch(e){}
+}
+function playNotifSound(){
+  try{
+    if(!notifAudioCtx) notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
+    const ctx = notifAudioCtx;
+    const now = ctx.currentTime;
+    [0, 0.22].forEach((offset, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = i===0 ? 880 : 1175;
+      gain.gain.setValueAtTime(0.0001, now+offset);
+      gain.gain.exponentialRampToValueAtTime(0.35, now+offset+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now+offset+0.2);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now+offset); osc.stop(now+offset+0.22);
+    });
+    if(navigator.vibrate) navigator.vibrate([200,80,200]);
+  }catch(e){}
+}
+async function requestNotifPermission(){
+  warmUpNotifAudio();
+  if(!('Notification' in window)) return;
+
+  if(Notification.permission === 'default'){
+    try{ await Notification.requestPermission(); }catch(e){}
+  }
+  if(Notification.permission !== 'granted') return;
+  if(!messaging || !('serviceWorker' in navigator)) return;
+
+  try{
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    if(token && session.role === 'driver' && session.nama){
+      const key = session.nama.trim().toLowerCase();
+      await TOKENS.doc(key).set({ token, nama: session.nama, updatedAt: Date.now() });
+    }
+  }catch(e){
+    console.warn('FCM token gagal disiapkan:', e);
+  }
+}
+
+// Notifikasi saat app SEDANG DIBUKA (foreground). Saat app tertutup/HP terkunci,
+// notifikasi ditampilkan otomatis oleh browser lewat firebase-messaging-sw.js.
+if(messaging){
+  try{
+    messaging.onMessage(payload => {
+      playNotifSound();
+      const title = (payload.notification && payload.notification.title) || '📦 Pesanan Baru Masuk!';
+      const body = (payload.notification && payload.notification.body) || '';
+      showToast(title + (body ? ' — ' + body : ''));
+    });
+  }catch(e){}
+}
+
+function notifyNewOrder(o){
+  // Untuk sesama tab yang masih terbuka di HP ini — bunyi & toast lokal instan.
+  // Push ke HP lain / saat app tertutup dikirim oleh Cloud Function lewat FCM.
+  playNotifSound();
+  showToast('📦 Pesanan baru masuk — segera diterima!');
+}
 
 function haversineKm(lat1,lng1,lat2,lng2){
   const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
@@ -545,8 +626,21 @@ function setupRealtimeListeners(){
   window.__listenersStarted = true;
 
   META.doc('orders').onSnapshot(snap => {
-    store = snap.exists ? snap.data() : { orders: [] };
-    if(!store.orders) store.orders = [];
+    const newStore = snap.exists ? snap.data() : { orders: [] };
+    if(!newStore.orders) newStore.orders = [];
+
+    if(session.loggedIn && session.role === 'driver'){
+      const nama = (session.nama||'').trim().toLowerCase();
+      const currentAssigned = newStore.orders.filter(o => o.driver && o.driver.toLowerCase()===nama && o.status==='ditugaskan');
+      if(!ordersListenerFirstRun){
+        const freshOnes = currentAssigned.filter(o => !knownAssignedOrderIds.has(o.id));
+        freshOnes.forEach(o => notifyNewOrder(o));
+      }
+      knownAssignedOrderIds = new Set(currentAssigned.map(o=>o.id));
+      ordersListenerFirstRun = false;
+    }
+
+    store = newStore;
     if(!session.loggedIn) return;
     render(); renderFleetMap(); renderDriverPerf();
     if(trackingOrderId) renderTracking(trackingOrderId, true);
@@ -680,9 +774,13 @@ async function loginDriver(){
   const pass = document.getElementById('loginPass').value;
   const acc = drivers.find(a => a.username===user && a.password===pass);
   if(!acc){ loginErr('Username atau password salah, atau akun belum didaftarkan Owner.'); return; }
+  warmUpNotifAudio();
   session = { loggedIn:true, role:'driver', nama:acc.nama, username:user, shareLocation:false };
   await persistSession();
+  knownAssignedOrderIds = new Set();
+  ordersListenerFirstRun = true;
   enterApp();
+  requestNotifPermission();
 }
 
 function logout(){
@@ -707,7 +805,7 @@ function enterApp(){
   document.getElementById('manageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('driverManageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('mapCardWrap').classList.toggle('hidden', session.role==='driver');
-  activeTab = session.role==='driver' ? 'tersedia' : 'semua';
+  activeTab = session.role==='driver' ? 'punya-saya' : 'semua';
 
   if(session.role!=='driver'){
     if(!fleetMap) initFleetMap();
@@ -717,7 +815,7 @@ function enterApp(){
   renderStoreBar();
   renderDriverBar();
 
-  if(session.role==='driver') startWatching();
+  if(session.role==='driver'){ startWatching(); requestNotifPermission(); }
   setupRealtimeListeners();
 }
 
@@ -966,7 +1064,7 @@ async function saveOrder(){
 
 // ================= Order list logic =================
 function getTabsForRole(){
-  if(session.role === 'driver') return [{id:'tersedia',label:'Tersedia'},{id:'punya-saya',label:'Pesanan Saya'},{id:'riwayat',label:'Riwayat'}];
+  if(session.role === 'driver') return [{id:'punya-saya',label:'Pesanan Saya'},{id:'riwayat',label:'Riwayat'}];
   return [{id:'semua',label:'Semua'},{id:'baru',label:'Baru'},{id:'proses',label:'Diproses'},{id:'selesai',label:'Selesai'}];
 }
 function switchTab(id){
@@ -987,9 +1085,8 @@ function filteredOrders(){
   const all = [...store.orders].sort((a,b)=> b.ts - a.ts);
   const nama = (session.nama||'').trim().toLowerCase();
   if(session.role === 'driver'){
-    if(activeTab === 'punya-saya') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='ditugaskan'||o.status==='diproses'));
     if(activeTab === 'riwayat') return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='selesai'||o.status==='batal')).filter(matchesHistDate);
-    return all.filter(o => o.status === 'baru' && !o.driver); // default: 'tersedia'
+    return all.filter(o => o.driver && o.driver.toLowerCase()===nama && (o.status==='ditugaskan'||o.status==='diproses')); // default: 'punya-saya'
   }
   if(activeTab === 'baru') return all.filter(o=>o.status==='baru');
   if(activeTab === 'proses') return all.filter(o=>o.status==='ditugaskan'||o.status==='diproses');
@@ -1111,8 +1208,7 @@ function orderActions(o){
   const canTrack = (o.status==='ditugaskan'||o.status==='diproses');
 
   if(session.role === 'driver'){
-    if(o.status === 'baru' && !o.driver) actions += `<button class="act-btn primary" onclick="claimOrder('${o.id}')">Ambil Pesanan</button>`;
-    else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">Mulai Jalan</button>`;
+    if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">✓ Terima Pesanan</button>`;
     else if(o.driver && o.driver.toLowerCase()===namaLower && o.status==='diproses') actions += `<button class="act-btn success" onclick="openCompleteSheet('${o.id}')">Selesaikan</button>`;
     return actions ? `<div class="order-actions">${actions}</div>` : '';
   }
@@ -1146,12 +1242,17 @@ function render(){
     const icon = o.jenis === 'antar' ? '💰' : '🏧';
     const jenisLabel = o.jenis === 'antar' ? 'Setor Tunai Toko' : 'Tarik Tunai Toko';
     let timerBadge = '';
+    let nudgeMsg = '';
     if(o.status==='ditugaskan'){
       const startRef = o.tsAssigned || o.ts;
-      timerBadge = `<span class="badge live-timer">⏱ Menunggu driver berangkat: ${formatElapsed(Date.now()-startRef)}</span>`;
+      const elapsedMs = Date.now()-startRef;
+      timerBadge = `<span class="badge live-timer">⏱ Menunggu driver berangkat: ${formatElapsed(elapsedMs)}</span>`;
+      if(session.role==='driver' && elapsedMs > 10*60*1000) nudgeMsg = '⚠️ Toko sudah menunggu cukup lama — segera terima & jalankan pesanan ini!';
     } else if(o.status==='diproses'){
       const startRef = o.tsStarted || o.ts;
-      timerBadge = `<span class="badge live-timer">🚗 ${formatElapsed(Date.now()-startRef)} di jalan</span>`;
+      const elapsedMs = Date.now()-startRef;
+      timerBadge = `<span class="badge live-timer">🚗 ${formatElapsed(elapsedMs)} di jalan</span>`;
+      if(session.role==='driver' && elapsedMs > 20*60*1000) nudgeMsg = '⚠️ Pesanan ini sudah lama diproses — segera selesaikan ya!';
     } else if(o.status==='selesai' && o.durasiMenit!=null){
       const respTxt = o.responseMenit!=null ? `Respon ${formatElapsed(o.responseMenit*60000)} · ` : '';
       timerBadge = `<span class="badge durasi">✓ ${respTxt}Antar ${formatElapsed(o.durasiMenit*60000)}</span>`;
@@ -1169,6 +1270,7 @@ function render(){
             <div class="order-time">${timeStr}</div>
           </div>
         </div>
+        ${nudgeMsg ? `<div class="nudge-banner">${nudgeMsg}</div>` : ''}
         <div class="order-badges">
           ${statusBadge(o.status)}
           ${timerBadge}
@@ -1190,11 +1292,6 @@ async function assignDriver(orderId){
   const o = store.orders.find(x=>x.id===orderId); if(!o) return;
   o.driver = val; o.status = 'ditugaskan'; o.tsAssigned = Date.now(); o.tsUpdate = Date.now();
   await persistOrders(); render(); renderFleetMap(); showToast('Driver ditugaskan');
-}
-async function claimOrder(orderId){
-  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
-  o.driver = session.nama; o.status = 'ditugaskan'; o.tsAssigned = Date.now(); o.tsUpdate = Date.now();
-  await persistOrders(); render(); renderFleetMap(); showToast('Pesanan diambil');
 }
 async function startOrder(orderId){
   const o = store.orders.find(x=>x.id===orderId); if(!o) return;
@@ -1367,15 +1464,7 @@ function renderTracking(orderId, silent){
     ${o.catatan ? `<div class="track-info-row"><span class="k">Catatan</span><span class="v">${escapeHtml(o.catatan)}</span></div>` : ''}
   `;
 
-  const nama = (session.nama||'').trim().toLowerCase();
-  let actionsHtml = '';
-  if(session.role === 'driver' && o.driver && o.driver.toLowerCase()===nama){
-    if(o.status==='ditugaskan') actionsHtml = `<button class="act-btn primary" style="width:100%;" onclick="startOrder('${o.id}')">Mulai Jalan</button>`;
-    else if(o.status==='diproses') actionsHtml = `<button class="act-btn success" style="width:100%;" onclick="openCompleteSheet('${o.id}')">Selesaikan Pesanan</button>`;
-  } else {
-    actionsHtml = `<button class="act-btn ghost" style="width:100%;" onclick="closeTracking()">Tutup</button>`;
-  }
-  document.getElementById('trackActions').innerHTML = actionsHtml;
+  document.getElementById('trackActions').innerHTML = `<button class="act-btn ghost" style="width:100%;" onclick="closeTracking()">Tutup</button>`;
 }
 
 boot();
