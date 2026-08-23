@@ -551,7 +551,7 @@ async function requestNotifPermission(){
   if(!messaging || !('serviceWorker' in navigator)) return;
 
   try{
-    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
     if(token && session.role === 'driver' && session.nama){
       const key = session.nama.trim().toLowerCase();
