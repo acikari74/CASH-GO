@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>CashGo — Kurir Kas BRILink</title>
+
+<!-- PWA: bisa diinstal ke home screen HP -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00B14F">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="icon-192.png">
+<!-- iOS Safari -->
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CashGo">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -36,6 +47,12 @@
   .login-tagline{font-size:12.5px; color:rgba(255,255,255,.6); margin-top:3px; margin-bottom:26px;}
   .login-card{background:var(--card); border-radius:20px; padding:22px 20px 24px; width:100%; max-width:400px; box-shadow:0 20px 40px rgba(0,0,0,.18);}
   .login-role-switch{display:flex;gap:6px;background:var(--bg);border-radius:12px;padding:4px;margin-bottom:18px;}
+  .install-banner{display:flex;align-items:center;gap:10px;background:var(--green-soft);border:1.5px solid var(--green);border-radius:14px;padding:12px 14px;margin-bottom:16px;}
+  .install-banner.ios-hint{background:var(--bg);border-color:var(--border);}
+  .ib-text{flex:1;min-width:0;}
+  .ib-title{font-size:13px;font-weight:800;color:var(--ink);}
+  .ib-sub{font-size:11px;color:var(--ink-soft);margin-top:1px;}
+  .ib-btn{flex:0 0 auto;background:var(--green);color:#04150a;border:none;padding:9px 16px;border-radius:10px;font-size:12.5px;font-weight:800;cursor:pointer;}
   .login-role-btn{flex:1;padding:10px 4px;border:none;background:transparent;border-radius:9px;font-size:12.5px;font-weight:700;color:var(--ink-soft);cursor:pointer;font-family:'Inter',sans-serif;}
   .login-role-btn.active{background:var(--dark);color:#fff;}
   .login-title{font-size:17px;font-weight:800;color:var(--ink);margin-bottom:3px;}
@@ -257,6 +274,20 @@
   <div class="login-tagline">Kurir kas real-time untuk kebutuhan BRILink</div>
 
   <div class="login-card">
+    <div class="install-banner hidden" id="installBanner">
+      <div class="ib-text">
+        <div class="ib-title">📲 Instal CashGo di HP</div>
+        <div class="ib-sub">Biar buka lebih cepat, tanpa buka browser dulu</div>
+      </div>
+      <button type="button" class="ib-btn" onclick="promptInstall()">Instal</button>
+    </div>
+    <div class="install-banner ios-hint hidden" id="iosInstallHint">
+      <div class="ib-text">
+        <div class="ib-title">📲 Instal di iPhone</div>
+        <div class="ib-sub">Tap ikon Share (kotak+panah) di Safari → "Add to Home Screen"</div>
+      </div>
+    </div>
+
     <div class="login-role-switch">
       <button class="login-role-btn" id="lrbOwner" onclick="switchLoginRole('owner')">👑 Owner</button>
       <button class="login-role-btn" id="lrbStaff" onclick="switchLoginRole('staff')">🏪 Staff</button>
@@ -1467,6 +1498,40 @@ function renderTracking(orderId, silent){
 
   document.getElementById('trackActions').innerHTML = `<button class="act-btn ghost" style="width:100%;" onclick="closeTracking()">Tutup</button>`;
 }
+
+// ================= PWA Install =================
+let deferredInstallPrompt = null;
+function isStandaloneMode(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(isStandaloneMode()) return;
+  const banner = document.getElementById('installBanner');
+  if(banner) banner.classList.remove('hidden');
+});
+function promptInstall(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.finally(() => {
+    deferredInstallPrompt = null;
+    const banner = document.getElementById('installBanner');
+    if(banner) banner.classList.add('hidden');
+  });
+}
+window.addEventListener('appinstalled', () => {
+  const banner = document.getElementById('installBanner');
+  if(banner) banner.classList.add('hidden');
+  showToast('✓ CashGo berhasil diinstal di HP');
+});
+(function showIosHintIfNeeded(){
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(isIOS && !isStandaloneMode()){
+    const hint = document.getElementById('iosInstallHint');
+    if(hint) hint.classList.remove('hidden');
+  }
+})();
 
 boot();
 </script>
