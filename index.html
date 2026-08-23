@@ -545,13 +545,19 @@ function formatNominalInput(el){
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1700); }
 
+let notifSoundEl = null;
 function warmUpNotifAudio(){
   try{
     if(!notifAudioCtx) notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
+    if(!notifSoundEl){
+      notifSoundEl = new Audio('notif-sound.mp3');
+      notifSoundEl.preload = 'auto';
+      notifSoundEl.load();
+    }
   }catch(e){}
 }
-function playNotifSound(){
+function playBeepFallback(){
   try{
     if(!notifAudioCtx) notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if(notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
@@ -568,8 +574,16 @@ function playNotifSound(){
       osc.connect(gain); gain.connect(ctx.destination);
       osc.start(now+offset); osc.stop(now+offset+0.22);
     });
-    if(navigator.vibrate) navigator.vibrate([200,80,200]);
   }catch(e){}
+}
+function playNotifSound(){
+  try{
+    if(navigator.vibrate) navigator.vibrate([250,100,250,100,250]);
+    if(!notifSoundEl) notifSoundEl = new Audio('notif-sound.mp3');
+    notifSoundEl.currentTime = 0;
+    const p = notifSoundEl.play();
+    if(p && p.catch) p.catch(() => playBeepFallback()); // kalau file gagal diputar, tetap ada bunyi cadangan
+  }catch(e){ playBeepFallback(); }
 }
 async function requestNotifPermission(){
   warmUpNotifAudio();
@@ -600,8 +614,9 @@ if(messaging){
   try{
     messaging.onMessage(payload => {
       playNotifSound();
-      const title = (payload.notification && payload.notification.title) || '📦 Pesanan Baru Masuk!';
-      const body = (payload.notification && payload.notification.body) || '';
+      const d = payload.data || {};
+      const title = d.title || '📦 Pesanan Baru Masuk!';
+      const body = d.body || '';
       showToast(title + (body ? ' — ' + body : ''));
     });
   }catch(e){}
