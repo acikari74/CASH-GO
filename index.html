@@ -101,6 +101,11 @@
   .map-count{position:absolute;top:10px;right:10px;background:#fff;color:var(--ink);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;z-index:500;box-shadow:var(--shadow);}
 
   .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px;}
+  .kode-unik-card{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--dark),var(--dark2));border-radius:14px;padding:14px 16px;margin-bottom:14px;}
+  .kode-unik-card .kt{color:rgba(255,255,255,.65);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+  .kode-unik-card .kv{color:var(--green);font-size:26px;font-weight:800;letter-spacing:.1em;font-family:'Plus Jakarta Sans',sans-serif;margin-top:2px;}
+  .kode-unik-card .ksub{color:rgba(255,255,255,.55);font-size:10.5px;margin-top:3px;max-width:210px;}
+  .kode-unik-card .kicon{font-size:30px;}
   .sum-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 13px;box-shadow:var(--shadow);}
   .sum-icon{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;margin-bottom:7px;}
   .sum-icon.a{background:var(--green-soft);}
@@ -165,6 +170,7 @@
   .perf-stat .s{font-size:10px;color:var(--ink-soft);}
 
   .order-note{font-size:12px;color:var(--ink-soft);margin-top:9px;font-style:italic;}
+  .cancel-note{font-size:12px;color:var(--red);margin-top:9px;font-style:italic;background:var(--red-soft);padding:8px 11px;border-radius:9px;}
   .nudge-banner{background:var(--red-soft);color:var(--red);font-size:12px;font-weight:700;padding:9px 12px;border-radius:10px;margin-top:11px;animation:nudgepulse 1.6s infinite;}
   @keyframes nudgepulse{0%,100%{opacity:1;}50%{opacity:.6;}}
 
@@ -264,6 +270,21 @@
   .track-info-row .v{font-weight:700;color:var(--ink);}
 
   .track-actions{position:fixed;bottom:0;left:0;right:0;background:var(--card);padding:14px 18px 20px;box-shadow:0 -4px 16px rgba(0,0,0,.06);z-index:85;}
+
+  .battery-modal{position:fixed;inset:0;background:rgba(11,15,20,.6);z-index:95;display:none;align-items:flex-end;justify-content:center;}
+  .battery-modal.open{display:flex;}
+  .battery-sheet{background:var(--card);width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:26px 22px 24px;max-height:88vh;overflow-y:auto;text-align:center;}
+  .battery-icon{font-size:44px;margin-bottom:10px;}
+  .battery-title{font-size:19px;font-weight:800;color:var(--ink);margin-bottom:8px;}
+  .battery-sub{font-size:13px;color:var(--ink-soft);line-height:1.5;margin-bottom:20px;text-align:left;}
+  .battery-open-btn{width:100%;padding:15px;border:none;border-radius:12px;background:var(--green);color:#04150a;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:18px;}
+  .battery-steps{text-align:left;background:var(--bg);border-radius:14px;padding:14px 16px;margin-bottom:18px;}
+  .battery-step-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--ink);line-height:1.4;}
+  .battery-step-item:last-child{border-bottom:none;}
+  .battery-step-num{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--green-soft);color:var(--green-deep);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  .battery-brand-tag{display:inline-block;background:var(--amber-soft);color:#B45309;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:20px;margin-bottom:10px;}
+  .battery-done-btn{width:100%;padding:14px;border:none;border-radius:12px;background:var(--dark);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px;}
+  .battery-skip{font-size:12px;color:var(--ink-faint);text-decoration:underline;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -324,6 +345,10 @@
       <div><div class="lbl">🛵 Kelola Akun Driver</div><div class="sub" id="driverCountSub">0 driver terdaftar</div></div>
       <div class="chev">›</div>
     </div>
+    <div class="manage-bar hidden" id="batteryGuideLinkWrap" onclick="renderBatterySteps(); document.getElementById('batteryModal').classList.add('open');">
+      <div><div class="lbl">🔋 Panduan Notifikasi Selalu Aktif</div><div class="sub">Buka lagi kalau perlu setting ulang</div></div>
+      <div class="chev">›</div>
+    </div>
 
     <div class="map-card" id="mapCardWrap">
       <div class="map-badge"><span class="live-dot"></span>LIVE</div>
@@ -331,6 +356,7 @@
       <div id="fleetMap"></div>
     </div>
 
+    <div id="myKodeUnikWrap"></div>
     <div class="summary-grid" id="summaryGrid"></div>
     <div id="driverPerfWrap"></div>
     <div class="tabs" id="tabs"></div>
@@ -393,8 +419,31 @@
         <input type="text" id="inpNominalFinal" placeholder="0" inputmode="numeric" oninput="formatNominalInput(this)">
         <div class="hint">Isi sesuai jumlah yang benar-benar diserahkan/ditarik di lapangan.</div>
       </div>
+      <div class="field">
+        <label>Kode Unik dari Staff Toko</label>
+        <input type="text" id="inpKodeSelesai" placeholder="cth. 4821" inputmode="numeric" maxlength="6" oninput="this.value=this.value.replace(/\D/g,'')">
+        <div class="hint">Minta kode ini LANGSUNG ke staff toko di lokasi — tanpa kode yang benar, pesanan tidak bisa diselesaikan.</div>
+      </div>
+      <div id="kodeSelesaiErr"></div>
       <button class="save-btn" style="background:var(--green);color:#04150a;" onclick="confirmCompleteOrder()">✓ Konfirmasi Selesai</button>
       <div class="cancel-link" onclick="closeCompleteSheet()">Batal</div>
+    </div>
+  </div>
+
+  <!-- Cancel order sheet -->
+  <div class="sheet-backdrop" id="cancelSheetBackdrop" onclick="closeOnCancelBackdrop(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">✕ Batalkan Pesanan</div>
+      <div class="track-card" id="cancelSummary" style="margin-bottom:16px;"></div>
+      <div class="field">
+        <label>Alasan Pembatalan</label>
+        <input type="text" id="inpCancelReason" placeholder="cth. Toko salah input nominal, salah pilih jenis pesanan, dll">
+        <div class="hint">Alasan ini akan terlihat oleh Owner.</div>
+      </div>
+      <div id="cancelReasonErr"></div>
+      <button class="save-btn" style="background:var(--red);color:#fff;" onclick="confirmCancelOrder()">✕ Konfirmasi Batalkan</button>
+      <div class="cancel-link" onclick="closeCancelSheet()">Tutup</div>
     </div>
   </div>
 
@@ -479,6 +528,22 @@
       <div class="track-card" id="trackDetails"></div>
     </div>
     <div class="track-actions" id="trackActions"></div>
+  </div>
+
+  <!-- Battery onboarding modal (khusus Driver, muncul sekali di awal) -->
+  <div class="battery-modal" id="batteryModal">
+    <div class="battery-sheet">
+      <div class="battery-icon">🔋</div>
+      <div class="battery-title">Satu Langkah Penting</div>
+      <div class="battery-sub">Supaya notifikasi pesanan SELALU masuk walau HP dikunci / app ditutup, HP kamu perlu diizinkan untuk tidak "membekukan" CashGo di background.</div>
+
+      <button type="button" class="battery-open-btn" id="batteryOpenBtn" onclick="openPhoneSettings()">⚙️ Buka Pengaturan HP</button>
+
+      <div class="battery-steps" id="batterySteps"></div>
+
+      <button type="button" class="battery-done-btn" onclick="closeBatteryOnboarding()">✓ Sudah Saya Atur, Lanjutkan</button>
+      <div class="battery-skip" onclick="closeBatteryOnboarding()">Lewati dulu, atur nanti</div>
+    </div>
   </div>
 </div>
 
@@ -629,6 +694,87 @@ function notifyNewOrder(o){
   showToast('📦 Pesanan baru masuk — segera diterima!');
 }
 
+// ================= Battery onboarding (khusus Driver) =================
+const BATTERY_SEEN_KEY = 'cashgo-battery-onboarding-seen-v1';
+
+function detectPhoneBrand(){
+  const ua = navigator.userAgent.toLowerCase();
+  if(!/android/.test(ua)) return 'lainnya'; // iOS/desktop tidak ada battery optimization ala Android
+  if(/redmi|xiaomi|poco|mi\s/.test(ua)) return 'xiaomi';
+  if(/oppo|realme|cph/.test(ua)) return 'oppo';
+  if(/vivo|iqoo/.test(ua)) return 'vivo';
+  if(/samsung|sm-/.test(ua)) return 'samsung';
+  return 'android-lain';
+}
+
+function getBatterySteps(brand){
+  const common = [
+    'Buka app <b>Settings/Pengaturan</b> HP (kalau tidak otomatis terbuka, cari sendiri di menu HP).',
+  ];
+  const byBrand = {
+    xiaomi: [
+      ...common,
+      'Masuk ke <b>Apps</b> → cari <b>Chrome</b> (atau "CashGo" kalau sudah ke-instal sebagai app terpisah).',
+      'Tap <b>Battery saver</b> → pilih <b>No restrictions</b>.',
+      'Kembali, tap <b>Autostart</b> pada app yang sama → aktifkan toggle-nya.',
+    ],
+    oppo: [
+      ...common,
+      'Masuk ke <b>Battery</b> → <b>App Battery Management</b> → cari Chrome/CashGo.',
+      'Ubah jadi <b>Allow background activity</b> / matikan "Optimasi baterai" untuk app ini.',
+      'Cek juga <b>App startup manager / Autostart</b>, aktifkan untuk app ini.',
+    ],
+    vivo: [
+      ...common,
+      'Masuk ke <b>Battery</b> → <b>Background power consumption management</b> / <b>High background power consumption</b>.',
+      'Cari Chrome/CashGo, izinkan <b>Allow</b> jalan di background.',
+      'Cek juga <b>i Manager → App manager → Autostart</b>, aktifkan untuk app ini.',
+    ],
+    samsung: [
+      ...common,
+      'Masuk ke <b>Apps</b> → cari Chrome/CashGo → <b>Battery</b>.',
+      'Ubah jadi <b>Unrestricted</b> (bukan "Optimized" atau "Restricted").',
+    ],
+    'android-lain': [
+      ...common,
+      'Masuk ke <b>Apps</b> → cari Chrome (atau "CashGo") → <b>Battery</b>.',
+      'Ubah jadi <b>Unrestricted / No restrictions / Don\'t optimize</b>.',
+    ],
+    lainnya: [
+      'Fitur ini khusus untuk HP Android. Kalau kamu pakai iPhone, tidak perlu setting tambahan apa pun — cukup pastikan notifikasi diizinkan saat diminta.',
+    ],
+  };
+  return byBrand[brand] || byBrand['android-lain'];
+}
+
+function renderBatterySteps(){
+  const brand = detectPhoneBrand();
+  const brandLabel = { xiaomi:'Xiaomi/Redmi/POCO', oppo:'Oppo/Realme', vivo:'Vivo/iQOO', samsung:'Samsung', 'android-lain':'Android', lainnya:'iPhone/Lainnya' }[brand];
+  const steps = getBatterySteps(brand);
+  document.getElementById('batteryOpenBtn').classList.toggle('hidden', brand === 'lainnya');
+  document.getElementById('batterySteps').innerHTML = `
+    <div class="battery-brand-tag">Terdeteksi: ${brandLabel}</div>
+    ${steps.map((s,i) => `<div class="battery-step-item"><div class="battery-step-num">${i+1}</div><div>${s}</div></div>`).join('')}
+  `;
+}
+
+function openPhoneSettings(){
+  // Best-effort: tidak ada cara web langsung buka halaman Battery spesifik (dibatasi Android
+  // demi keamanan). Ini membuka app Settings HP secara umum — user tinggal ikuti langkah di bawah.
+  try{ window.location.href = 'intent://#Intent;action=android.settings.SETTINGS;end'; }
+  catch(e){ showToast('Buka manual: Settings HP → Apps → Chrome/CashGo → Battery'); }
+}
+
+function maybeShowBatteryOnboarding(){
+  try{ if(localStorage.getItem(BATTERY_SEEN_KEY) === '1') return; }catch(e){}
+  renderBatterySteps();
+  document.getElementById('batteryModal').classList.add('open');
+}
+function closeBatteryOnboarding(){
+  document.getElementById('batteryModal').classList.remove('open');
+  try{ localStorage.setItem(BATTERY_SEEN_KEY, '1'); }catch(e){}
+}
+
 function haversineKm(lat1,lng1,lat2,lng2){
   const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
   const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
@@ -689,7 +835,7 @@ function setupRealtimeListeners(){
 
     store = newStore;
     if(!session.loggedIn) return;
-    render(); renderFleetMap(); renderDriverPerf();
+    render(); renderFleetMap(); renderDriverPerf(); renderMyKodeUnik();
     if(trackingOrderId) renderTracking(trackingOrderId, true);
     const perfSheet = document.getElementById('perfLogSheetBackdrop');
     if(perfSheet && perfSheet.classList.contains('open')) renderPerfLog();
@@ -705,7 +851,7 @@ function setupRealtimeListeners(){
   META.doc('stores').onSnapshot(snap => {
     stores = (snap.exists && Array.isArray(snap.data().list)) ? snap.data().list : [];
     if(!session.loggedIn) return;
-    renderStoreBar(); renderStoreGrid();
+    renderStoreBar(); renderStoreGrid(); renderMyKodeUnik();
     const storeSheet = document.getElementById('storeSheetBackdrop');
     if(storeSheet && storeSheet.classList.contains('open')) renderStoreManagerList();
   });
@@ -828,6 +974,7 @@ async function loginDriver(){
   ordersListenerFirstRun = true;
   enterApp();
   requestNotifPermission();
+  maybeShowBatteryOnboarding();
 }
 
 function logout(){
@@ -851,6 +998,7 @@ function enterApp(){
   document.getElementById('fab').classList.toggle('hidden', session.role==='driver');
   document.getElementById('manageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('driverManageBarWrap').classList.toggle('hidden', session.role!=='owner');
+  document.getElementById('batteryGuideLinkWrap').classList.toggle('hidden', session.role!=='driver');
   document.getElementById('mapCardWrap').classList.toggle('hidden', session.role==='driver');
   activeTab = session.role==='driver' ? 'punya-saya' : 'semua';
 
@@ -861,8 +1009,9 @@ function enterApp(){
   render();
   renderStoreBar();
   renderDriverBar();
+  renderMyKodeUnik();
 
-  if(session.role==='driver'){ startWatching(); requestNotifPermission(); }
+  if(session.role==='driver'){ startWatching(); requestNotifPermission(); maybeShowBatteryOnboarding(); }
   setupRealtimeListeners();
 }
 
@@ -1047,6 +1196,28 @@ function myLinkedStore(){
   return stores.find(s => s.id === session.storeId) || stores.find(s => s.nama === session.storeNama) || null;
 }
 
+function renderMyKodeUnik(){
+  const wrap = document.getElementById('myKodeUnikWrap');
+  if(!wrap) return;
+  if(session.role !== 'staff'){ wrap.innerHTML = ''; return; }
+  const myActiveOrders = store.orders.filter(o =>
+    o.dibuatOleh === session.nama && o.kodeUnik && (o.status==='baru'||o.status==='ditugaskan'||o.status==='diproses')
+  ).sort((a,b) => b.ts - a.ts);
+  if(!myActiveOrders.length){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = `
+    <div class="kode-unik-card" style="flex-direction:column;align-items:stretch;gap:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="kt">🔑 Kode Selesai — Pesanan Aktif Kamu</div>
+      </div>
+      ${myActiveOrders.map(o => `
+        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.06);border-radius:10px;padding:9px 12px;">
+          <div style="font-size:11.5px;color:rgba(255,255,255,.75);">${o.jenis==='antar'?'💰 Setor':'🏧 Tarik'} · ${fmtRp(o.nominal)}</div>
+          <div class="kv" style="font-size:19px;">${escapeHtml(o.kodeUnik)}</div>
+        </div>`).join('')}
+      <div class="ksub">Kasih kode yang sesuai ke driver LANGSUNG di lokasi saat pesanan selesai — jangan dikirim lewat chat.</div>
+    </div>`;
+}
+
 function openSheet(){
   document.getElementById('inpNominal').value = '';
   document.getElementById('inpNote').value = '';
@@ -1093,20 +1264,21 @@ async function saveOrder(){
   if(pickedStore.driverNama && drivers.some(d=>d.nama===pickedStore.driverNama)) autoDriver = pickedStore.driverNama;
 
   const now = Date.now();
+  const kodeUnik = String(Math.floor(1000 + Math.random()*9000)); // 4 digit acak, unik per pesanan
   const order = {
     id: 'o'+now+Math.random().toString(36).slice(2,7),
     jenis: currentJenis, nominal, tujuan, catatan, tujuanLat, tujuanLng,
-    dibuatOleh: session.nama, nominalAktual: null,
+    dibuatOleh: session.nama, nominalAktual: null, kodeUnik,
     driver: autoDriver, status: autoDriver ? 'ditugaskan' : 'baru',
     tsAssigned: autoDriver ? now : null, tsStarted: null, tsCompleted: null,
-    responseMenit: null, durasiMenit: null,
+    responseMenit: null, durasiMenit: null, cancelReason: null, canceledBy: null,
     ts: now, tsUpdate: now
   };
   store.orders.push(order);
   await persistOrders();
   render(); renderFleetMap();
   closeSheet();
-  showToast(autoDriver ? `Pesanan otomatis masuk ke ${autoDriver}` : 'Pesanan dibuat ke ' + tujuan);
+  showToast(autoDriver ? `Pesanan masuk ke ${autoDriver} — kode selesai: ${kodeUnik}` : 'Pesanan dibuat ke ' + tujuan);
 }
 
 // ================= Order list logic =================
@@ -1266,7 +1438,9 @@ function orderActions(o){
     <button class="act-btn primary" onclick="assignDriver('${o.id}')">Tugaskan</button>`;
   }
   if(canTrack) actions += `<button class="act-btn track" onclick="openTracking('${o.id}')">🛰️ Lacak Live</button>`;
-  if(session.role === 'owner' && (o.status==='baru'||o.status==='ditugaskan')) actions += `<button class="act-btn danger" onclick="cancelOrder('${o.id}')">Batalkan</button>`;
+  const canCancel = (o.status==='baru' || o.status==='ditugaskan') &&
+    (session.role === 'owner' || (session.role === 'staff' && o.dibuatOleh === session.nama));
+  if(canCancel) actions += `<button class="act-btn danger" onclick="openCancelSheet('${o.id}')">Batalkan</button>`;
   return actions ? `<div class="order-actions">${actions}</div>` : '';
 }
 
@@ -1326,6 +1500,7 @@ function render(){
         </div>
         ${o.catatan ? `<div class="order-note">"${escapeHtml(o.catatan)}"</div>` : ''}
         ${o.status==='selesai' && o.nominalAktual ? `<div class="order-note">Nominal final: ${fmtRp(o.nominalAktual)}</div>` : ''}
+        ${o.status==='batal' && o.cancelReason ? `<div class="cancel-note">✕ Dibatalkan oleh ${escapeHtml(o.canceledBy||'-')}: "${escapeHtml(o.cancelReason)}"</div>` : ''}
         ${orderActions(o)}
       </div>`;
   }).join('');
@@ -1360,6 +1535,8 @@ function openCompleteSheet(orderId){
   `;
   const inp = document.getElementById('inpNominalFinal');
   inp.value = o.nominal.toLocaleString('id-ID');
+  document.getElementById('inpKodeSelesai').value = '';
+  document.getElementById('kodeSelesaiErr').innerHTML = '';
   document.getElementById('completeSheetBackdrop').classList.add('open');
 }
 function closeCompleteSheet(){ document.getElementById('completeSheetBackdrop').classList.remove('open'); completingOrderId = null; }
@@ -1368,6 +1545,24 @@ function closeOnCompleteBackdrop(e){ if(e.target.id === 'completeSheetBackdrop')
 async function confirmCompleteOrder(){
   if(!completingOrderId) return;
   const o = store.orders.find(x=>x.id===completingOrderId); if(!o) return;
+
+  const errBox = document.getElementById('kodeSelesaiErr');
+  errBox.innerHTML = '';
+  const enteredCode = document.getElementById('inpKodeSelesai').value.trim();
+
+  if(!o.kodeUnik){
+    errBox.innerHTML = `<div class="login-error">Pesanan ini tidak punya kode unik (dibuat sebelum fitur ini ada). Hubungi Owner untuk konfirmasi manual.</div>`;
+    return;
+  }
+  if(!enteredCode){
+    errBox.innerHTML = `<div class="login-error">Isi kode unik dari staff toko dulu, ya.</div>`;
+    return;
+  }
+  if(enteredCode !== String(o.kodeUnik)){
+    errBox.innerHTML = `<div class="login-error">Kode salah. Minta ulang kode ke staff toko di lokasi.</div>`;
+    return;
+  }
+
   const val = parseInt(document.getElementById('inpNominalFinal').value.replace(/\D/g,'')) || o.nominal;
   const now = Date.now();
   const startRef = o.tsStarted || o.tsAssigned || o.ts;
@@ -1377,11 +1572,33 @@ async function confirmCompleteOrder(){
   closeCompleteSheet();
   showToast('Pesanan selesai');
 }
-async function cancelOrder(orderId){
+let cancelingOrderId = null;
+function openCancelSheet(orderId){
   const o = store.orders.find(x=>x.id===orderId); if(!o) return;
-  if(!confirm('Batalkan pesanan ini?')) return;
-  o.status = 'batal'; o.tsUpdate = Date.now();
+  cancelingOrderId = orderId;
+  document.getElementById('cancelSummary').innerHTML = `
+    <div class="track-info-row"><span class="k">Jenis</span><span class="v">${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</span></div>
+    <div class="track-info-row"><span class="k">Toko</span><span class="v">${escapeHtml(o.tujuan)}</span></div>
+    <div class="track-info-row"><span class="k">Nominal</span><span class="v">${fmtRp(o.nominal)}</span></div>
+  `;
+  document.getElementById('inpCancelReason').value = '';
+  document.getElementById('cancelReasonErr').innerHTML = '';
+  document.getElementById('cancelSheetBackdrop').classList.add('open');
+}
+function closeCancelSheet(){ document.getElementById('cancelSheetBackdrop').classList.remove('open'); cancelingOrderId = null; }
+function closeOnCancelBackdrop(e){ if(e.target.id === 'cancelSheetBackdrop') closeCancelSheet(); }
+
+async function confirmCancelOrder(){
+  if(!cancelingOrderId) return;
+  const o = store.orders.find(x=>x.id===cancelingOrderId); if(!o) return;
+  const reason = document.getElementById('inpCancelReason').value.trim();
+  if(!reason){
+    document.getElementById('cancelReasonErr').innerHTML = `<div class="login-error">Isi alasan pembatalan dulu, ya — Owner perlu tahu kenapa.</div>`;
+    return;
+  }
+  o.status = 'batal'; o.cancelReason = reason; o.canceledBy = session.nama; o.tsUpdate = Date.now();
   await persistOrders(); render(); renderFleetMap();
+  closeCancelSheet();
   showToast('Pesanan dibatalkan');
 }
 
