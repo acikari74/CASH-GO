@@ -19,15 +19,28 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// skipWaiting + clients.claim(): begitu ada versi service worker baru ter-deploy,
+// LANGSUNG aktif dan ambil alih kontrol tanpa perlu semua tab ditutup dulu.
+// Ini mencegah HP "nyangkut" pakai versi service worker lama yang mungkin ada bug.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+
 // Saat pesan FCM masuk ketika app/tab TIDAK sedang dibuka aktif,
 // browser otomatis memanggil ini dan menampilkan notifikasi sistem.
+// PENTING: kita HANYA baca dari payload.data (bukan payload.notification).
+// Cloud Function sengaja mengirim data-only supaya notifikasi CUMA muncul
+// dari sini satu kali — kalau ada payload.notification juga, browser akan
+// menampilkan notifikasi otomatis SENDIRI di luar kendali kita, jadinya dobel.
 messaging.onBackgroundMessage((payload) => {
-  const title = (payload.notification && payload.notification.title) || '📦 Pesanan Baru Masuk!';
+  const d = payload.data || {};
+  const title = d.title || '📦 Pesanan Baru Masuk!';
   const options = {
-    body: (payload.notification && payload.notification.body) || '',
-    icon: undefined,
-    tag: (payload.data && payload.data.orderId) ? 'cashgo-order-' + payload.data.orderId : 'cashgo-order',
-    vibrate: [200, 80, 200]
+    body: d.body || '',
+    tag: d.orderId ? 'cashgo-order-' + d.orderId : 'cashgo-order',
+    renotify: true,
+    requireInteraction: true,
+    vibrate: [250, 100, 250, 100, 250],
+    data: { link: (payload.fcmOptions && payload.fcmOptions.link) || './' }
   };
   self.registration.showNotification(title, options);
 });
@@ -35,12 +48,13 @@ messaging.onBackgroundMessage((payload) => {
 // Klik notifikasi -> buka/fokuskan tab aplikasi
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.link) || './';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if ('focus' in client) return client.focus();
       }
-      if (clients.openWindow) return clients.openWindow('./');
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
 });
