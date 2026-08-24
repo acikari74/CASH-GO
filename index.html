@@ -737,6 +737,26 @@ function playNotifSound(){
     if(p && p.catch) p.catch(() => playBeepFallback()); // kalau file gagal diputar, tetap ada bunyi cadangan
   }catch(e){ playBeepFallback(); }
 }
+function playChatPing(){
+  // Notifikasi chat: bunyi "ting" satu nada ringan + getar singkat — TIDAK memakai
+  // alarm keras seperti pesanan baru, karena chat bukan hal darurat.
+  try{
+    if(navigator.vibrate) navigator.vibrate(120);
+    if(!notifAudioCtx) notifAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(notifAudioCtx.state === 'suspended') notifAudioCtx.resume();
+    const ctx = notifAudioCtx;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 1046;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.22, now+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+0.18);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(now); osc.stop(now+0.18);
+  }catch(e){}
+}
 async function requestNotifPermission(){
   warmUpNotifAudio();
   if(!('Notification' in window)) return;
@@ -766,8 +786,12 @@ async function requestNotifPermission(){
 if(messaging){
   try{
     messaging.onMessage(payload => {
-      playNotifSound();
       const d = payload.data || {};
+      if(d.type === 'chat'){
+        playChatPing(); // bunyi ringan biasa, bukan alarm keras
+      } else {
+        playNotifSound(); // alarm keras khusus pesanan baru — harus segera disadari
+      }
       const title = d.title || '📦 Pesanan Baru Masuk!';
       const body = d.body || '';
       showToast(title + (body ? ' — ' + body : ''));
@@ -1699,6 +1723,7 @@ function orderActions(o){
   }
   if(canTrack) actions += `<button class="act-btn track" onclick="openTracking('${o.id}')">🛰️ Lacak Live</button>`;
   if(canChat && session.role==='staff' && o.dibuatOleh===session.nama) actions += `<button class="act-btn ghost" onclick="openChat('${o.id}')">💬 Chat Driver</button><button class="act-btn ghost" onclick="callPartnerForOrder('${o.id}')">📞</button>`;
+  if(session.role==='owner' && o.driverId) actions += `<button class="act-btn ghost" onclick="openChat('${o.id}')">💬 Lihat Chat</button>`;
   const canCancel = (o.status==='baru' || o.status==='ditugaskan') &&
     (session.role === 'owner' || (session.role === 'staff' && o.dibuatOleh === session.nama));
   if(canCancel) actions += `<button class="act-btn danger" onclick="openCancelSheet('${o.id}')">Batalkan</button>`;
@@ -1988,12 +2013,21 @@ function openChat(orderId){
   currentChatOrderId = orderId;
 
   const isDriverSide = session.role === 'driver';
-  const partnerName = isDriverSide ? (o.dibuatOleh || 'Staff Toko') : (o.driverNama || 'Driver');
-  document.getElementById('chatPartnerName').textContent = partnerName;
-  document.getElementById('chatOrderInfo').textContent = `${o.jenis==='antar'?'Setor':'Tarik'} · ${o.tujuan} · ${fmtRp(o.nominal)}`;
+  const isOwnerView = session.role === 'owner';
+  let partnerName, canCall;
+  if(isOwnerView){
+    partnerName = `${escapeHtml(o.dibuatOleh||'Staff')} ↔ ${escapeHtml(o.driverNama||'Driver')}`;
+    canCall = false; // Owner cuma pantau, bukan pihak yang terlibat langsung
+  } else if(isDriverSide){
+    partnerName = o.dibuatOleh || 'Staff Toko';
+    canCall = !!(stores.find(s=>s.nama===o.tujuan)?.hp);
+  } else {
+    partnerName = o.driverNama || 'Driver';
+    canCall = !!(drivers.find(d=>d.id===o.driverId)?.hp);
+  }
+  document.getElementById('chatPartnerName').innerHTML = partnerName;
+  document.getElementById('chatOrderInfo').textContent = `${o.jenis==='antar'?'Setor':'Tarik'} · ${o.tujuan} · ${fmtRp(o.nominal)}${isOwnerView ? ' · 🔒 Mode Pantau' : ''}`;
   document.getElementById('chatInputText').value = '';
-
-  const canCall = isDriverSide ? !!(stores.find(s=>s.nama===o.tujuan)?.hp) : !!(drivers.find(d=>d.id===o.driverId)?.hp);
   document.getElementById('chatCallBtn').classList.toggle('hidden', !canCall);
 
   document.getElementById('chatMessages').innerHTML = `<div class="chat-empty">Memuat percakapan...</div>`;
