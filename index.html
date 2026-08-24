@@ -295,6 +295,27 @@
 
   .track-actions{position:fixed;bottom:0;left:0;right:0;background:var(--card);padding:14px 18px 20px;box-shadow:0 -4px 16px rgba(0,0,0,.06);z-index:85;}
 
+  .chat-modal{position:fixed;inset:0;background:var(--bg);z-index:97;display:none;flex-direction:column;}
+  .chat-modal.open{display:flex;}
+  .chat-top{background:var(--dark);padding:14px 16px;display:flex;align-items:center;gap:12px;flex:0 0 auto;}
+  .chat-top-info{flex:1;min-width:0;}
+  .chat-top-name{color:#fff;font-size:14.5px;font-weight:800;}
+  .chat-top-sub{color:rgba(255,255,255,.6);font-size:11px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chat-call-btn{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--green);border:none;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;}
+  .chat-bubble{max-width:78%;padding:10px 13px;border-radius:16px;font-size:13.5px;line-height:1.4;word-wrap:break-word;}
+  .chat-bubble.mine{align-self:flex-end;background:var(--green);color:#04150a;border-bottom-right-radius:4px;}
+  .chat-bubble.theirs{align-self:flex-start;background:var(--card);color:var(--ink);border:1px solid var(--border);border-bottom-left-radius:4px;}
+  .chat-bubble .cb-sender{font-size:10px;font-weight:700;opacity:.65;margin-bottom:3px;}
+  .chat-bubble .cb-time{font-size:9.5px;opacity:.55;margin-top:4px;text-align:right;}
+  .chat-empty{text-align:center;color:var(--ink-faint);font-size:12.5px;padding:30px 20px;}
+  .chat-input-row{flex:0 0 auto;display:flex;gap:8px;padding:12px 14px;background:var(--card);border-top:1px solid var(--border);}
+  .chat-input-row input{flex:1;padding:12px 14px;border-radius:24px;border:1.5px solid var(--border);background:var(--bg);font-size:13.5px;font-family:'Inter',sans-serif;color:var(--ink);}
+  .chat-input-row input:focus{outline:none;border-color:var(--green);}
+  .chat-send-btn{width:42px;height:42px;border-radius:50%;background:var(--dark);color:#fff;border:none;font-size:16px;cursor:pointer;flex:0 0 auto;}
+  .chat-btn-badge{position:relative;}
+  .chat-unread-dot{position:absolute;top:-3px;right:-3px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid #fff;}
+
   .battery-modal{position:fixed;inset:0;background:rgba(11,15,20,.6);z-index:95;display:none;align-items:flex-end;justify-content:center;}
   .battery-modal.open{display:flex;}
   .battery-sheet{background:var(--card);width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:26px 22px 24px;max-height:88vh;overflow-y:auto;text-align:center;}
@@ -496,6 +517,7 @@
         </div>
         <div class="field"><label>Username Login Toko</label><input type="text" id="inpStoreUser" placeholder="cth. toko1"></div>
         <div class="field"><label>Password</label><input type="text" id="inpStorePass" placeholder="buat password sederhana"></div>
+        <div class="field"><label>No. HP Toko (opsional)</label><input type="text" id="inpStoreHp" placeholder="cth. 0812xxxxxxxx"></div>
         <div class="hint" style="margin-top:-6px;">Ini yang dipakai staff toko ini untuk login — tidak perlu akun staff terpisah, toko = staff.</div>
         <button class="save-btn" onclick="addStore()">+ Tambah Toko</button>
       </div>
@@ -568,6 +590,23 @@
     <div class="track-actions" id="trackActions"></div>
   </div>
 
+  <!-- Chat modal -->
+  <div class="chat-modal" id="chatModal">
+    <div class="chat-top">
+      <button class="track-close" onclick="closeChat()">✕</button>
+      <div class="chat-top-info">
+        <div class="chat-top-name" id="chatPartnerName">Chat</div>
+        <div class="chat-top-sub" id="chatOrderInfo">-</div>
+      </div>
+      <button class="chat-call-btn" id="chatCallBtn" onclick="callChatPartner()">📞</button>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInputText" placeholder="Ketik pesan..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+      <button class="chat-send-btn" onclick="sendChatMessage()">➤</button>
+    </div>
+  </div>
+
   <!-- Battery onboarding modal (khusus Driver, muncul sekali di awal) -->
   <div class="battery-modal" id="batteryModal">
     <div class="battery-sheet">
@@ -613,6 +652,7 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const META = db.collection('meta');
 const TOKENS = db.collection('tokens');
+const CHATS = db.collection('chats');
 
 // GANTI dengan VAPID key dari: Firebase Console > Project Settings > Cloud Messaging > Web Push certificates
 const VAPID_KEY = "BKzbdt295eZplnubGcbxXLes579gVjpV-65cUtxwobNjbTmnrxPfhqurOrfQd7eQy_xxmlIlz04nR6WngYpBoHk";
@@ -713,6 +753,8 @@ async function requestNotifPermission(){
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: readyReg || reg });
     if(token && session.role === 'driver' && session.driverId){
       await TOKENS.doc(session.driverId).set({ token, nama: session.nama, updatedAt: Date.now() });
+    } else if(token && session.role === 'staff' && session.storeId){
+      await TOKENS.doc(session.storeId).set({ token, nama: session.nama, updatedAt: Date.now() });
     }
   }catch(e){
     console.warn('FCM token gagal disiapkan:', e);
@@ -1006,9 +1048,11 @@ async function loginStaff(){
   const pass = document.getElementById('loginPass').value;
   const acc = stores.find(s => s.username===user && s.password===pass);
   if(!acc){ loginErr('Username atau password salah, atau toko belum didaftarkan Owner.'); return; }
+  warmUpNotifAudio();
   session = { loggedIn:true, role:'staff', nama:acc.nama, username:user, storeId:acc.id, storeNama:acc.nama, shareLocation:false };
   await persistSession();
   enterApp();
+  requestNotifPermission();
 }
 
 async function loginDriver(){
@@ -1028,6 +1072,8 @@ async function loginDriver(){
 
 function logout(){
   if(watchId !== null) stopWatching();
+  if(chatUnsubscribe){ chatUnsubscribe(); chatUnsubscribe = null; }
+  currentChatOrderId = null;
   session = { loggedIn:false, role:null, nama:'', driverId:null, username:'', shareLocation:false };
   persistSession();
   knownAssignedOrderIds = new Set();
@@ -1064,6 +1110,7 @@ function enterApp(){
   renderMyKodeUnik();
 
   if(session.role==='driver'){ startWatching(); requestNotifPermission(); maybeShowBatteryOnboarding(); }
+  if(session.role==='staff'){ requestNotifPermission(); }
   setupRealtimeListeners();
 }
 
@@ -1103,6 +1150,7 @@ function openStoreManager(){
   document.getElementById('storeGeoPicked').innerHTML = '';
   document.getElementById('inpStoreUser').value = '';
   document.getElementById('inpStorePass').value = '';
+  document.getElementById('inpStoreHp').value = '';
   pickedStoreGeo = null;
   fillStoreDriverSelect();
   renderStoreManagerList();
@@ -1163,9 +1211,10 @@ async function addStore(){
   const driverId = document.getElementById('inpStoreDriver').value;
   const user = document.getElementById('inpStoreUser').value.trim();
   const pass = document.getElementById('inpStorePass').value.trim();
+  const hp = document.getElementById('inpStoreHp').value.trim();
   if(!nama){ showToast('Isi nama toko dulu'); return; }
   if(user && stores.some(s=>s.username && s.username.toLowerCase()===user.toLowerCase())){ showToast('Username sudah dipakai toko lain'); return; }
-  const s = { id:'s'+Date.now()+Math.random().toString(36).slice(2,6), nama, alamat, lat: pickedStoreGeo?pickedStoreGeo.lat:null, lng: pickedStoreGeo?pickedStoreGeo.lng:null, driverId: driverId||null, username: user||null, password: pass||null };
+  const s = { id:'s'+Date.now()+Math.random().toString(36).slice(2,6), nama, alamat, lat: pickedStoreGeo?pickedStoreGeo.lat:null, lng: pickedStoreGeo?pickedStoreGeo.lng:null, driverId: driverId||null, username: user||null, password: pass||null, hp: hp||null };
   stores.push(s);
   await persistStores();
   renderStoreBar(); renderStoreManagerList(); renderStoreGrid();
@@ -1175,6 +1224,7 @@ async function addStore(){
   document.getElementById('inpStoreDriver').value = '';
   document.getElementById('inpStoreUser').value = '';
   document.getElementById('inpStorePass').value = '';
+  document.getElementById('inpStoreHp').value = '';
   pickedStoreGeo = null;
   showToast('Toko ditambahkan');
 }
@@ -1627,11 +1677,13 @@ function statusBadge(status){
 function orderActions(o){
   let actions = '';
   const canTrack = (o.status==='ditugaskan'||o.status==='diproses');
+  const canChat = (o.status==='ditugaskan'||o.status==='diproses') && o.driverId;
 
   if(session.role === 'driver'){
     const myId = session.driverId;
     if(o.driverId === myId && o.status==='ditugaskan') actions += `<button class="act-btn primary" onclick="startOrder('${o.id}')">✓ Terima Pesanan</button>`;
     else if(o.driverId === myId && o.status==='diproses') actions += `<button class="act-btn success" onclick="openCompleteSheet('${o.id}')">Selesaikan</button>`;
+    if(canChat && o.driverId===myId) actions += `<button class="act-btn ghost" onclick="openChat('${o.id}')">💬 Chat Staff</button><button class="act-btn ghost" onclick="callPartnerForOrder('${o.id}')">📞</button>`;
     return actions ? `<div class="order-actions">${actions}</div>` : '';
   }
 
@@ -1646,6 +1698,7 @@ function orderActions(o){
     <button class="act-btn primary" onclick="assignDriver('${o.id}')">Tugaskan</button>`;
   }
   if(canTrack) actions += `<button class="act-btn track" onclick="openTracking('${o.id}')">🛰️ Lacak Live</button>`;
+  if(canChat && session.role==='staff' && o.dibuatOleh===session.nama) actions += `<button class="act-btn ghost" onclick="openChat('${o.id}')">💬 Chat Driver</button><button class="act-btn ghost" onclick="callPartnerForOrder('${o.id}')">📞</button>`;
   const canCancel = (o.status==='baru' || o.status==='ditugaskan') &&
     (session.role === 'owner' || (session.role === 'staff' && o.dibuatOleh === session.nama));
   if(canCancel) actions += `<button class="act-btn danger" onclick="openCancelSheet('${o.id}')">Batalkan</button>`;
@@ -1917,6 +1970,100 @@ function closeTracking(){
   document.getElementById('trackModal').classList.remove('open');
   trackingOrderId = null;
   if(trackMap){ trackMap.remove(); trackMap = null; trackMarkers = {}; }
+}
+
+// ================= Chat =================
+let currentChatOrderId = null;
+let chatUnsubscribe = null;
+
+function myChatIdentity(){
+  // Identitas unik pengirim, dipakai untuk bedakan bubble "punya saya" vs "lawan bicara".
+  if(session.role === 'staff') return { role:'staff', id: session.storeId, nama: session.nama };
+  if(session.role === 'driver') return { role:'driver', id: session.driverId, nama: session.nama };
+  return { role: session.role, id: null, nama: session.nama };
+}
+
+function openChat(orderId){
+  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  currentChatOrderId = orderId;
+
+  const isDriverSide = session.role === 'driver';
+  const partnerName = isDriverSide ? (o.dibuatOleh || 'Staff Toko') : (o.driverNama || 'Driver');
+  document.getElementById('chatPartnerName').textContent = partnerName;
+  document.getElementById('chatOrderInfo').textContent = `${o.jenis==='antar'?'Setor':'Tarik'} · ${o.tujuan} · ${fmtRp(o.nominal)}`;
+  document.getElementById('chatInputText').value = '';
+
+  const canCall = isDriverSide ? !!(stores.find(s=>s.nama===o.tujuan)?.hp) : !!(drivers.find(d=>d.id===o.driverId)?.hp);
+  document.getElementById('chatCallBtn').classList.toggle('hidden', !canCall);
+
+  document.getElementById('chatMessages').innerHTML = `<div class="chat-empty">Memuat percakapan...</div>`;
+  document.getElementById('chatModal').classList.add('open');
+
+  if(chatUnsubscribe) chatUnsubscribe();
+  chatUnsubscribe = CHATS.doc(orderId).onSnapshot(snap => {
+    const messages = (snap.exists && Array.isArray(snap.data().messages)) ? snap.data().messages : [];
+    renderChatMessages(messages);
+  }, err => { console.warn('Chat listener error:', err); });
+}
+
+function closeChat(){
+  document.getElementById('chatModal').classList.remove('open');
+  if(chatUnsubscribe){ chatUnsubscribe(); chatUnsubscribe = null; }
+  currentChatOrderId = null;
+}
+
+function renderChatMessages(messages){
+  const wrap = document.getElementById('chatMessages');
+  if(!messages.length){ wrap.innerHTML = `<div class="chat-empty">💬 Belum ada pesan. Mulai percakapan di bawah.</div>`; return; }
+  const me = myChatIdentity();
+  wrap.innerHTML = messages.map(m => {
+    const isMine = m.senderId === me.id && m.senderRole === me.role;
+    const timeStr = new Date(m.ts).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+    return `
+      <div class="chat-bubble ${isMine?'mine':'theirs'}">
+        ${!isMine ? `<div class="cb-sender">${escapeHtml(m.senderNama||'-')}</div>` : ''}
+        <div>${escapeHtml(m.text)}</div>
+        <div class="cb-time">${timeStr}</div>
+      </div>`;
+  }).join('');
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function sendChatMessage(){
+  const input = document.getElementById('chatInputText');
+  const text = input.value.trim();
+  if(!text || !currentChatOrderId) return;
+  const me = myChatIdentity();
+  const msg = { senderRole: me.role, senderId: me.id, senderNama: me.nama, text, ts: Date.now() };
+  input.value = '';
+  try{
+    const docRef = CHATS.doc(currentChatOrderId);
+    const snap = await docRef.get();
+    const existing = (snap.exists && Array.isArray(snap.data().messages)) ? snap.data().messages : [];
+    existing.push(msg);
+    await docRef.set({ messages: existing, orderId: currentChatOrderId, updatedAt: Date.now() });
+  }catch(e){
+    showToast('Gagal kirim pesan, coba lagi');
+  }
+}
+
+function callChatPartner(){
+  if(!currentChatOrderId) return;
+  callPartnerForOrder(currentChatOrderId);
+}
+
+function callPartnerForOrder(orderId){
+  const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  let phone = null;
+  if(session.role === 'driver'){
+    const s = stores.find(s=>s.nama===o.tujuan);
+    phone = s ? s.hp : null;
+  } else {
+    const d = drivers.find(d=>d.id===o.driverId);
+    phone = d ? d.hp : null;
+  }
+  if(!phone){ showToast('Nomor HP belum diisi Owner'); return; }
+  window.location.href = 'tel:' + phone.replace(/[^\d+]/g,'');
 }
 
 function renderTracking(orderId, silent){
