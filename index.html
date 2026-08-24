@@ -2003,7 +2003,10 @@ function openChat(orderId){
   chatUnsubscribe = CHATS.doc(orderId).onSnapshot(snap => {
     const messages = (snap.exists && Array.isArray(snap.data().messages)) ? snap.data().messages : [];
     renderChatMessages(messages);
-  }, err => { console.warn('Chat listener error:', err); });
+  }, err => {
+    console.warn('Chat listener error:', err);
+    document.getElementById('chatMessages').innerHTML = `<div class="chat-empty">⚠️ Chat belum bisa dimuat.<br><br>Kemungkinan Firestore Rules belum di-deploy ulang (perlu jalankan <code>firebase deploy --only firestore:rules</code> di terminal).<br><br><span style="font-size:10px;opacity:.7;">Detail teknis: ${escapeHtml(err.code||err.message||'unknown error')}</span></div>`;
+  });
 }
 
 function closeChat(){
@@ -2036,14 +2039,25 @@ async function sendChatMessage(){
   const me = myChatIdentity();
   const msg = { senderRole: me.role, senderId: me.id, senderNama: me.nama, text, ts: Date.now() };
   input.value = '';
+  input.disabled = true;
   try{
     const docRef = CHATS.doc(currentChatOrderId);
-    const snap = await docRef.get();
-    const existing = (snap.exists && Array.isArray(snap.data().messages)) ? snap.data().messages : [];
+    let existing = [];
+    try{
+      const snap = await docRef.get();
+      existing = (snap.exists && Array.isArray(snap.data().messages)) ? snap.data().messages : [];
+    }catch(getErr){
+      // Dokumen belum pernah dibuat / permission masalah saat baca — anggap kosong dan coba tetap tulis.
+      console.warn('Gagal baca chat lama, mulai dari kosong:', getErr);
+    }
     existing.push(msg);
     await docRef.set({ messages: existing, orderId: currentChatOrderId, updatedAt: Date.now() });
   }catch(e){
-    showToast('Gagal kirim pesan, coba lagi');
+    console.error('Gagal kirim chat:', e);
+    input.value = text; // kembalikan teks yang gagal terkirim, biar tidak hilang
+    showToast('⚠️ Gagal kirim pesan (' + (e.code||'error') + '). Rules Firestore mungkin belum di-deploy.');
+  }finally{
+    input.disabled = false;
   }
 }
 
