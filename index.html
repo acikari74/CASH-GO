@@ -93,12 +93,23 @@
   .manage-bar .sub{font-size:11px;color:var(--ink-soft);margin-top:1px;}
   .manage-bar .chev{color:var(--ink-faint);font-size:14px;}
 
-  .map-card{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:12px;margin-top:12px;position:relative;}
-  #fleetMap{height:200px;width:100%;background:#E5E9ED;}
-  .map-badge{position:absolute;top:10px;left:10px;background:rgba(11,15,20,.75);color:#fff;font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;z-index:500;}
+  .map-card{background:var(--card);border-radius:18px;overflow:hidden;box-shadow:0 4px 14px rgba(16,24,32,.08), 0 1px 3px rgba(16,24,32,.06);margin-bottom:12px;margin-top:12px;position:relative;border:1px solid rgba(16,24,32,.05);cursor:pointer;transition:transform .15s, box-shadow .15s;}
+  .map-card:active{transform:scale(0.985);}
+  #fleetMap{height:210px;width:100%;background:#E9EDF1;}
+  #fleetMapFull{flex:1;width:100%;background:#E9EDF1;}
+  .map-badge{position:absolute;top:10px;left:10px;background:rgba(11,15,20,.78);backdrop-filter:blur(4px);color:#fff;font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;display:flex;align-items:center;gap:5px;z-index:500;}
   .live-dot{width:6px;height:6px;border-radius:50%;background:#ff4d4d;animation:pulse 1.4s infinite;}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,77,77,.6);}70%{box-shadow:0 0 0 6px rgba(255,77,77,0);}100%{box-shadow:0 0 0 0 rgba(255,77,77,0);}}
   .map-count{position:absolute;top:10px;right:10px;background:#fff;color:var(--ink);font-size:10.5px;font-weight:700;padding:5px 10px;border-radius:20px;z-index:500;box-shadow:var(--shadow);}
+  .map-expand-hint{position:absolute;bottom:10px;right:10px;background:rgba(11,15,20,.78);backdrop-filter:blur(4px);color:#fff;font-size:10px;font-weight:700;padding:5px 10px;border-radius:20px;z-index:500;}
+  .driver-label-tooltip{background:var(--dark)!important;color:#fff!important;border:none!important;font-size:10.5px!important;font-weight:700!important;padding:3px 8px!important;border-radius:8px!important;box-shadow:0 2px 6px rgba(0,0,0,.25)!important;}
+  .driver-label-tooltip::before{border-top-color:var(--dark)!important;}
+
+  .fleetmap-modal{position:fixed;inset:0;background:#fff;z-index:96;display:none;flex-direction:column;}
+  .fleetmap-modal.open{display:flex;}
+  .fleetmap-top{position:relative;background:var(--dark);padding:14px;flex:0 0 auto;display:flex;align-items:center;}
+  .fleetmap-top .track-close{position:static;margin-right:12px;}
+  .fleetmap-top .track-live{position:static;background:transparent;color:#fff;padding:0;}
 
   .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px;}
   .kode-unik-card{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--dark),var(--dark2));border-radius:14px;padding:14px 16px;margin-bottom:14px;}
@@ -350,9 +361,10 @@
       <div class="chev">›</div>
     </div>
 
-    <div class="map-card" id="mapCardWrap">
+    <div class="map-card" id="mapCardWrap" onclick="openFleetMapFull()">
       <div class="map-badge"><span class="live-dot"></span>LIVE</div>
       <div class="map-count" id="fleetCount">0 driver aktif</div>
+      <div class="map-expand-hint">⤢ Tap untuk perbesar</div>
       <div id="fleetMap"></div>
     </div>
 
@@ -489,6 +501,16 @@
         <div class="field"><label>No. HP (opsional)</label><input type="text" id="inpDriverHp" placeholder="cth. 0812xxxxxxxx"></div>
         <div class="field"><label>Username Login</label><input type="text" id="inpDriverUser" placeholder="cth. budi01"></div>
         <div class="field"><label>Password</label><input type="text" id="inpDriverPass" placeholder="buat password sederhana"></div>
+        <div class="field">
+          <label>Limit Setor Tunai per Pesanan (Rp)</label>
+          <input type="text" id="inpDriverLimitSetor" placeholder="cth. 10.000.000" inputmode="numeric" oninput="formatNominalInput(this)">
+          <div class="hint">Kosongkan kalau tidak mau dibatasi.</div>
+        </div>
+        <div class="field">
+          <label>Limit Tarik Tunai per Pesanan (Rp)</label>
+          <input type="text" id="inpDriverLimitTarik" placeholder="cth. 10.000.000" inputmode="numeric" oninput="formatNominalInput(this)">
+          <div class="hint">Kosongkan kalau tidak mau dibatasi.</div>
+        </div>
         <button class="save-btn" onclick="addDriver()">+ Tambah Driver</button>
       </div>
       <div class="cancel-link" onclick="closeDriverManager()">Tutup</div>
@@ -544,6 +566,15 @@
       <button type="button" class="battery-done-btn" onclick="closeBatteryOnboarding()">✓ Sudah Saya Atur, Lanjutkan</button>
       <div class="battery-skip" onclick="closeBatteryOnboarding()">Lewati dulu, atur nanti</div>
     </div>
+  </div>
+
+  <!-- Fleet map full-screen (Owner/Staff) -->
+  <div class="fleetmap-modal" id="fleetMapModal">
+    <div class="fleetmap-top">
+      <button class="track-close" onclick="closeFleetMapFull()">✕</button>
+      <div class="track-live"><span class="live-dot"></span>LIVE · <span id="fleetCountFull">0 driver aktif</span></div>
+    </div>
+    <div id="fleetMapFull"></div>
   </div>
 </div>
 
@@ -687,6 +718,9 @@ if(messaging){
 }
 
 function notifyNewOrder(o){
+  // Pengaman ganda: walau pemanggilnya sudah difilter, tetap dicek ulang di sini
+  // supaya TIDAK MUNGKIN ada notifikasi bunyi untuk pesanan driver lain.
+  if(session.role !== 'driver' || !session.driverId || !o || o.driverId !== session.driverId) return;
   // Untuk sesama tab yang masih terbuka di HP ini — bunyi & toast lokal instan.
   // Push ke HP lain / saat app tertutup dikirim oleh Cloud Function lewat FCM.
   playNotifSound();
@@ -978,8 +1012,11 @@ async function loginDriver(){
 
 function logout(){
   if(watchId !== null) stopWatching();
-  session = { loggedIn:false, role:null, nama:'', username:'', shareLocation:false };
+  session = { loggedIn:false, role:null, nama:'', driverId:null, username:'', shareLocation:false };
   persistSession();
+  knownAssignedOrderIds = new Set();
+  ordersListenerFirstRun = true;
+  trackingOrderId = null;
   document.getElementById('appScreen').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   loginRole = 'owner';
@@ -1154,6 +1191,8 @@ function openDriverManager(){
   document.getElementById('inpDriverHp').value = '';
   document.getElementById('inpDriverUser').value = '';
   document.getElementById('inpDriverPass').value = '';
+  document.getElementById('inpDriverLimitSetor').value = '';
+  document.getElementById('inpDriverLimitTarik').value = '';
   renderDriverManagerList();
   document.getElementById('driverSheetBackdrop').classList.add('open');
 }
@@ -1163,19 +1202,40 @@ function renderDriverManagerList(){
   const wrap = document.getElementById('driverListWrap');
   if(!drivers.length){ wrap.innerHTML = `<div class="store-empty">Belum ada driver. Tambahkan di bawah.</div>`; return; }
   wrap.innerHTML = drivers.map(d => `
-    <div class="store-list-item">
-      <div><div class="sn">${escapeHtml(d.nama)}</div><div class="sa">@${escapeHtml(d.username||'-')} · ${escapeHtml(d.hp || 'tanpa HP')}</div></div>
-      <button class="store-del" onclick="deleteDriver('${d.id}')">✕</button>
+    <div class="store-list-item" style="align-items:flex-start;flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+        <div><div class="sn">${escapeHtml(d.nama)}</div><div class="sa">@${escapeHtml(d.username||'-')} · ${escapeHtml(d.hp || 'tanpa HP')}</div></div>
+        <button class="store-del" onclick="deleteDriver('${d.id}')">✕</button>
+      </div>
+      <div style="display:flex;gap:8px;width:100%;">
+        <div style="flex:1;">
+          <label style="font-size:9.5px;">Limit Setor</label>
+          <input type="text" class="act-select" style="width:100%;padding:8px 10px;" value="${d.limitSetor ? Number(d.limitSetor).toLocaleString('id-ID') : ''}" placeholder="Tanpa limit" inputmode="numeric" oninput="formatNominalInput(this)" onchange="updateDriverLimit('${d.id}','limitSetor',this.value)">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:9.5px;">Limit Tarik</label>
+          <input type="text" class="act-select" style="width:100%;padding:8px 10px;" value="${d.limitTarik ? Number(d.limitTarik).toLocaleString('id-ID') : ''}" placeholder="Tanpa limit" inputmode="numeric" oninput="formatNominalInput(this)" onchange="updateDriverLimit('${d.id}','limitTarik',this.value)">
+        </div>
+      </div>
     </div>`).join('');
+}
+async function updateDriverLimit(driverId, field, rawValue){
+  const d = drivers.find(x=>x.id===driverId); if(!d) return;
+  const val = parseInt(String(rawValue).replace(/\D/g,'')) || null;
+  d[field] = val;
+  await persistDrivers();
+  showToast('Limit driver diperbarui');
 }
 async function addDriver(){
   const nama = document.getElementById('inpDriverNama').value.trim();
   const hp = document.getElementById('inpDriverHp').value.trim();
   const user = document.getElementById('inpDriverUser').value.trim();
   const pass = document.getElementById('inpDriverPass').value.trim();
+  const limitSetor = parseInt(document.getElementById('inpDriverLimitSetor').value.replace(/\D/g,'')) || null;
+  const limitTarik = parseInt(document.getElementById('inpDriverLimitTarik').value.replace(/\D/g,'')) || null;
   if(!nama || !user || !pass){ showToast('Isi nama, username, dan password dulu'); return; }
   if(drivers.some(d=>d.username.toLowerCase()===user.toLowerCase())){ showToast('Username sudah dipakai driver lain'); return; }
-  const d = { id:'drv'+Date.now()+Math.random().toString(36).slice(2,6), nama, hp, username:user, password:pass };
+  const d = { id:'drv'+Date.now()+Math.random().toString(36).slice(2,6), nama, hp, username:user, password:pass, limitSetor, limitTarik };
   drivers.push(d);
   await persistDrivers();
   renderDriverBar(); renderDriverManagerList();
@@ -1183,6 +1243,8 @@ async function addDriver(){
   document.getElementById('inpDriverHp').value = '';
   document.getElementById('inpDriverUser').value = '';
   document.getElementById('inpDriverPass').value = '';
+  document.getElementById('inpDriverLimitSetor').value = '';
+  document.getElementById('inpDriverLimitTarik').value = '';
   showToast('Driver ditambahkan');
 }
 async function deleteDriver(id){
@@ -1214,7 +1276,7 @@ function renderMyKodeUnik(){
       </div>
       ${myActiveOrders.map(o => `
         <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.06);border-radius:10px;padding:9px 12px;">
-          <div style="font-size:11.5px;color:rgba(255,255,255,.75);">${o.jenis==='antar'?'💰 Setor':'🏧 Tarik'} · ${fmtRp(o.nominal)}</div>
+          <div style="font-size:11.5px;color:rgba(255,255,255,.75);">${o.jenis==='antar'?'💰 Setor':'🏧 Tarik'} · ${fmtRp(o.nominal)}${o.splitTotal ? ` · trip ${o.splitIndex}/${o.splitTotal}` : ''}</div>
           <div class="kv" style="font-size:19px;">${escapeHtml(o.kodeUnik)}</div>
         </div>`).join('')}
       <div class="ksub">Kasih kode yang sesuai ke driver LANGSUNG di lokasi saat pesanan selesai — jangan dikirim lewat chat.</div>
@@ -1264,28 +1326,60 @@ async function saveOrder(){
   const tujuan = pickedStore.nama;
   const tujuanLat = pickedStore.lat || null;
   const tujuanLng = pickedStore.lng || null;
-  let autoDriverId = null, autoDriverNama = null;
+
+  let autoDriverId = null, autoDriverNama = null, driverLimit = null;
   if(pickedStore.driverId){
     const d = drivers.find(x=>x.id===pickedStore.driverId);
-    if(d){ autoDriverId = d.id; autoDriverNama = d.nama; }
+    if(d){
+      autoDriverId = d.id; autoDriverNama = d.nama;
+      const limitField = currentJenis === 'antar' ? 'limitSetor' : 'limitTarik';
+      driverLimit = d[limitField] || null;
+    }
   }
 
-  const now = Date.now();
-  const kodeUnik = String(Math.floor(1000 + Math.random()*9000)); // 4 digit acak, unik per pesanan
-  const order = {
-    id: 'o'+now+Math.random().toString(36).slice(2,7),
-    jenis: currentJenis, nominal, tujuan, catatan, tujuanLat, tujuanLng,
-    dibuatOleh: session.nama, nominalAktual: null, kodeUnik,
-    driverId: autoDriverId, driverNama: autoDriverNama, status: autoDriverId ? 'ditugaskan' : 'baru',
-    tsAssigned: autoDriverId ? now : null, tsStarted: null, tsCompleted: null,
-    responseMenit: null, durasiMenit: null, cancelReason: null, canceledBy: null,
-    ts: now, tsUpdate: now
-  };
-  store.orders.push(order);
+  // Pecah otomatis jadi beberapa trip kalau nominal melebihi limit driver —
+  // supaya driver tidak pernah bawa uang lebih dari limit yang ditentukan Owner sekaligus.
+  let parts = [nominal];
+  if(autoDriverId && driverLimit && nominal > driverLimit){
+    parts = [];
+    let remaining = nominal;
+    while(remaining > driverLimit){ parts.push(driverLimit); remaining -= driverLimit; }
+    if(remaining > 0) parts.push(remaining);
+  }
+  const isSplit = parts.length > 1;
+  const splitGroupId = isSplit ? ('grp'+Date.now()+Math.random().toString(36).slice(2,6)) : null;
+
+  const baseNow = Date.now();
+  const createdCodes = [];
+  parts.forEach((partNominal, idx) => {
+    const now = baseNow + idx; // pastikan id & urutan unik walau dibuat di milidetik yang sama
+    const kodeUnik = String(Math.floor(1000 + Math.random()*9000));
+    createdCodes.push(kodeUnik);
+    const order = {
+      id: 'o'+now+Math.random().toString(36).slice(2,7),
+      jenis: currentJenis, nominal: partNominal, tujuan, catatan, tujuanLat, tujuanLng,
+      dibuatOleh: session.nama, nominalAktual: null, kodeUnik,
+      driverId: autoDriverId, driverNama: autoDriverId ? autoDriverNama : null,
+      status: autoDriverId ? 'ditugaskan' : 'baru',
+      tsAssigned: autoDriverId ? now : null, tsStarted: null, tsCompleted: null,
+      responseMenit: null, durasiMenit: null, cancelReason: null, canceledBy: null,
+      splitGroupId, splitIndex: isSplit ? idx+1 : null, splitTotal: isSplit ? parts.length : null,
+      ts: now, tsUpdate: now
+    };
+    store.orders.push(order);
+  });
+
   await persistOrders();
   render(); renderFleetMap();
   closeSheet();
-  showToast(autoDriverId ? `Pesanan masuk ke ${autoDriverNama} — kode selesai: ${kodeUnik}` : 'Pesanan dibuat ke ' + tujuan);
+
+  if(isSplit){
+    showToast(`⚠️ Nominal ${fmtRp(nominal)} melebihi limit ${autoDriverNama} (${fmtRp(driverLimit)}/trip) — otomatis dipecah jadi ${parts.length} pesanan ke driver yang sama.`);
+  } else if(autoDriverId){
+    showToast(`Pesanan masuk ke ${autoDriverNama} — kode selesai: ${createdCodes[0]}`);
+  } else {
+    showToast('Pesanan dibuat ke ' + tujuan);
+  }
 }
 
 // ================= Order list logic =================
@@ -1444,8 +1538,13 @@ function orderActions(o){
     return actions ? `<div class="order-actions">${actions}</div>` : '';
   }
 
-  if(o.status === 'baru'){
-    const options = drivers.length ? drivers.map(d=>`<option value="${escapeHtml(d.id)}">${escapeHtml(d.nama)}</option>`).join('') : `<option value="">(belum ada driver terdaftar)</option>`;
+  if(o.status === 'baru' && session.role === 'owner'){
+    const limitField = o.jenis === 'antar' ? 'limitSetor' : 'limitTarik';
+    const options = drivers.length ? drivers.map(d=>{
+      const overLimit = d[limitField] && o.nominal > d[limitField];
+      const label = overLimit ? `${d.nama} — melebihi limit (maks ${fmtRp(d[limitField])})` : d.nama;
+      return `<option value="${escapeHtml(d.id)}" ${overLimit?'disabled':''}>${escapeHtml(label)}</option>`;
+    }).join('') : `<option value="">(belum ada driver terdaftar)</option>`;
     actions += `<select class="act-select" id="assign-${o.id}"><option value="">Pilih driver...</option>${options}</select>
     <button class="act-btn primary" onclick="assignDriver('${o.id}')">Tugaskan</button>`;
   }
@@ -1473,7 +1572,7 @@ function render(){
     const d = new Date(o.ts);
     const timeStr = d.toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
     const icon = o.jenis === 'antar' ? '💰' : '🏧';
-    const jenisLabel = o.jenis === 'antar' ? 'Setor Tunai Toko' : 'Tarik Tunai Toko';
+    const jenisLabel = (o.jenis === 'antar' ? 'Setor Tunai Toko' : 'Tarik Tunai Toko') + (o.splitTotal ? ` (${o.splitIndex}/${o.splitTotal})` : '');
     let timerBadge = '';
     let nudgeMsg = '';
     if(o.status==='ditugaskan'){
@@ -1510,6 +1609,7 @@ function render(){
           ${o.driverId ? `<span class="badge driver">🛵 ${escapeHtml(o.driverNama||'-')}</span>` : ''}
           ${o.dibuatOleh ? `<span class="badge driver">oleh ${escapeHtml(o.dibuatOleh)}</span>` : ''}
         </div>
+        ${o.splitTotal ? `<div class="order-note">📦 Trip ${o.splitIndex} dari ${o.splitTotal} — dipecah otomatis karena melebihi limit driver.</div>` : ''}
         ${o.catatan ? `<div class="order-note">"${escapeHtml(o.catatan)}"</div>` : ''}
         ${o.status==='selesai' && o.nominalAktual ? `<div class="order-note">Nominal final: ${fmtRp(o.nominalAktual)}</div>` : ''}
         ${o.status==='batal' && o.cancelReason ? `<div class="cancel-note">✕ Dibatalkan oleh ${escapeHtml(o.canceledBy||'-')}: "${escapeHtml(o.cancelReason)}"</div>` : ''}
@@ -1526,6 +1626,12 @@ async function assignDriver(orderId){
   const d = drivers.find(x=>x.id===val);
   if(!d){ showToast('Driver tidak ditemukan'); return; }
   const o = store.orders.find(x=>x.id===orderId); if(!o) return;
+  const limitField = o.jenis === 'antar' ? 'limitSetor' : 'limitTarik';
+  const limitVal = d[limitField];
+  if(limitVal && o.nominal > limitVal){
+    showToast(`⚠️ Nominal ${fmtRp(o.nominal)} melebihi limit ${o.jenis==='antar'?'Setor':'Tarik'} ${d.nama} (${fmtRp(limitVal)}). Pilih driver lain.`);
+    return;
+  }
   o.driverId = d.id; o.driverNama = d.nama; o.status = 'ditugaskan'; o.tsAssigned = Date.now(); o.tsUpdate = Date.now();
   await persistOrders(); render(); renderFleetMap(); showToast('Driver ditugaskan');
 }
@@ -1617,41 +1723,75 @@ async function confirmCancelOrder(){
 }
 
 // ================= Fleet map =================
-function driverDivIcon(){ return L.divIcon({ className:'', html:'<div style="width:34px;height:34px;border-radius:50%;background:#00B14F;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 6px rgba(0,0,0,.3);border:2px solid #fff;">🛵</div>', iconSize:[34,34], iconAnchor:[17,17] }); }
+const PRETTY_TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const PRETTY_TILE_ATTR = '© OpenStreetMap contributors © CARTO';
+
+function driverDivIcon(){ return L.divIcon({ className:'', html:'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#00C25A,#00913F);display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 3px 8px rgba(0,0,0,.35);border:2.5px solid #fff;">🛵</div>', iconSize:[36,36], iconAnchor:[18,18] }); }
 function destDivIcon(){ return L.divIcon({ className:'', html:'<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:#0B0F14;transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.3);"><span style="transform:rotate(45deg);font-size:12px;">🎯</span></div>', iconSize:[28,28], iconAnchor:[14,28] }); }
 
 function initFleetMap(){
-  fleetMap = L.map('fleetMap', { zoomControl:false, attributionControl:true }).setView(DEFAULT_CENTER, 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(fleetMap);
+  fleetMap = L.map('fleetMap', { zoomControl:false, attributionControl:false }).setView(DEFAULT_CENTER, 12);
+  L.tileLayer(PRETTY_TILE_URL, { maxZoom:20, attribution:PRETTY_TILE_ATTR }).addTo(fleetMap);
 }
 
-function renderFleetMap(){
-  if(!fleetMap) return;
+function renderFleetMapInto(mapInstance, markersStore, countElId){
+  if(!mapInstance) return;
   const now = Date.now();
   const activeEntries = Object.entries(locations).filter(([id,l]) => now - l.ts < 15*60*1000);
-  document.getElementById('fleetCount').textContent = activeEntries.length + ' driver aktif';
+  const countEl = document.getElementById(countElId);
+  if(countEl) countEl.textContent = activeEntries.length + ' driver aktif';
 
   const seen = new Set();
   activeEntries.forEach(([driverId, loc]) => {
     const key = 'd_' + driverId;
     seen.add(key);
-    if(fleetMarkers[key]){ fleetMarkers[key].setLatLng([loc.lat, loc.lng]); }
-    else { fleetMarkers[key] = L.marker([loc.lat, loc.lng], { icon: driverDivIcon() }).bindTooltip(loc.name, {direction:'top', offset:[0,-16]}).addTo(fleetMap); }
+    if(markersStore[key]){ markersStore[key].setLatLng([loc.lat, loc.lng]); }
+    else {
+      markersStore[key] = L.marker([loc.lat, loc.lng], { icon: driverDivIcon() })
+        .bindTooltip(loc.name, { permanent:true, direction:'bottom', offset:[0,4], className:'driver-label-tooltip' })
+        .addTo(mapInstance);
+    }
   });
-  Object.keys(fleetMarkers).forEach(k => { if(k.startsWith('d_') && !seen.has(k)){ fleetMap.removeLayer(fleetMarkers[k]); delete fleetMarkers[k]; } });
+  Object.keys(markersStore).forEach(k => { if(k.startsWith('d_') && !seen.has(k)){ mapInstance.removeLayer(markersStore[k]); delete markersStore[k]; } });
 
   const activeOrders = store.orders.filter(o => (o.status==='ditugaskan'||o.status==='diproses') && o.tujuanLat);
   const seenDest = new Set();
   activeOrders.forEach(o => {
     const key = 'dest_' + o.id;
     seenDest.add(key);
-    if(fleetMarkers[key]){ fleetMarkers[key].setLatLng([o.tujuanLat, o.tujuanLng]); }
-    else { fleetMarkers[key] = L.marker([o.tujuanLat, o.tujuanLng], { icon: destDivIcon() }).bindTooltip(o.tujuan, {direction:'top', offset:[0,-24]}).addTo(fleetMap); }
+    if(markersStore[key]){ markersStore[key].setLatLng([o.tujuanLat, o.tujuanLng]); }
+    else { markersStore[key] = L.marker([o.tujuanLat, o.tujuanLng], { icon: destDivIcon() }).bindTooltip(o.tujuan, {direction:'top', offset:[0,-24]}).addTo(mapInstance); }
   });
-  Object.keys(fleetMarkers).forEach(k => { if(k.startsWith('dest_') && !seenDest.has(k)){ fleetMap.removeLayer(fleetMarkers[k]); delete fleetMarkers[k]; } });
+  Object.keys(markersStore).forEach(k => { if(k.startsWith('dest_') && !seenDest.has(k)){ mapInstance.removeLayer(markersStore[k]); delete markersStore[k]; } });
 
   const allPts = [...activeEntries.map(([id,l])=>[l.lat,l.lng]), ...activeOrders.map(o=>[o.tujuanLat,o.tujuanLng])];
-  if(allPts.length) fleetMap.fitBounds(allPts, { padding:[30,30], maxZoom:14 });
+  if(allPts.length) mapInstance.fitBounds(allPts, { padding:[36,36], maxZoom:15 });
+}
+
+function renderFleetMap(){
+  renderFleetMapInto(fleetMap, fleetMarkers, 'fleetCount');
+  if(fleetMapFull && document.getElementById('fleetMapModal').classList.contains('open')){
+    renderFleetMapInto(fleetMapFull, fleetMarkersFull, 'fleetCountFull');
+  }
+}
+
+// ---- Peta full-screen ----
+let fleetMapFull = null;
+let fleetMarkersFull = {};
+function openFleetMapFull(){
+  if(session.role === 'driver') return;
+  document.getElementById('fleetMapModal').classList.add('open');
+  setTimeout(() => {
+    if(!fleetMapFull){
+      fleetMapFull = L.map('fleetMapFull', { zoomControl:true, attributionControl:false }).setView(DEFAULT_CENTER, 12);
+      L.tileLayer(PRETTY_TILE_URL, { maxZoom:20, attribution:PRETTY_TILE_ATTR }).addTo(fleetMapFull);
+    }
+    fleetMapFull.invalidateSize();
+    renderFleetMapInto(fleetMapFull, fleetMarkersFull, 'fleetCountFull');
+  }, 60);
+}
+function closeFleetMapFull(){
+  document.getElementById('fleetMapModal').classList.remove('open');
 }
 
 // ================= Tracking modal (khusus Owner & Staff) =================
@@ -1662,7 +1802,7 @@ function openTracking(orderId){
   setTimeout(() => {
     if(!trackMap){
       trackMap = L.map('trackMap', { zoomControl:false }).setView(DEFAULT_CENTER, 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(trackMap);
+      L.tileLayer(PRETTY_TILE_URL, { maxZoom:20, attribution:PRETTY_TILE_ATTR }).addTo(trackMap);
     }
     renderTracking(orderId, false);
   }, 50);
