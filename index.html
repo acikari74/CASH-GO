@@ -154,6 +154,7 @@
   .badge.driver{background:#fff;border:1px solid var(--border);color:var(--ink-soft);}
   .badge .bdot{width:5px;height:5px;border-radius:50%;background:var(--green-deep);animation:pulse 1.4s infinite;}
   .badge.live-timer{background:var(--amber-soft);color:#B45309;}
+  .badge.eta-badge{background:var(--blue-soft);color:var(--blue);}
   .badge.durasi{background:#E7F7EE;color:#067647;}
 
   .perf-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 15px;margin-bottom:14px;box-shadow:var(--shadow);}
@@ -164,9 +165,21 @@
   .perf-row:nth-child(1) .perf-rank{background:#FFF4E5;color:#B45309;}
   .perf-name{flex:1;font-size:13px;font-weight:700;color:var(--ink);}
   .perf-sub{font-size:10.5px;font-weight:500;color:var(--ink-soft);margin-top:2px;}
+  .perf-stars{font-size:11px;margin-top:3px;display:flex;align-items:center;gap:5px;}
+  .perf-rating-label{font-size:9.5px;color:var(--ink-faint);font-weight:600;}
   .perf-lock{font-size:9.5px;font-weight:700;color:var(--ink-faint);background:var(--bg);padding:3px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;}
 
-  .log-filter{display:flex;gap:8px;margin-bottom:14px;}
+  .log-filter{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .log-filter select{flex:1 1 140px;}
+  .log-filter input[type=date]{flex:1 1 130px;padding:10px 10px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-size:12.5px;color:var(--ink);font-family:'Inter',sans-serif;}
+  .log-filter .hist-date-clear{flex:0 0 auto;}
+  .audit-summary{background:var(--dark);border-radius:14px;padding:15px 16px;margin-bottom:16px;color:#fff;}
+  .audit-summary-title{font-size:12px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+  .audit-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .audit-stat{background:rgba(255,255,255,.08);border-radius:10px;padding:9px 11px;}
+  .audit-stat .al{font-size:9.5px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.04em;}
+  .audit-stat .av{font-size:15px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .audit-stars{margin-top:10px;font-size:14px;display:flex;align-items:center;gap:6px;}
   .log-filter select{flex:1;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);background:var(--card);font-size:13px;color:var(--ink);font-family:'Inter',sans-serif;}
   .log-row{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:9px;}
   .log-row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
@@ -521,12 +534,15 @@
   <div class="sheet-backdrop" id="perfLogSheetBackdrop" onclick="closeOnPerfLogBackdrop(event)">
     <div class="sheet">
       <div class="sheet-handle"></div>
-      <div class="sheet-title">Log Performa Driver — Semua Transaksi</div>
+      <div class="sheet-title">Log Performa Driver — Audit Transaksi</div>
       <div class="log-filter">
         <select id="perfLogFilter" onchange="renderPerfLog()">
           <option value="">Semua driver</option>
         </select>
+        <input type="date" id="perfLogDate" onchange="renderPerfLog()">
+        <button type="button" class="hist-date-clear" onclick="clearPerfLogDate()">Semua Tgl</button>
       </div>
+      <div id="perfLogSummary"></div>
       <div id="perfLogList"></div>
       <div class="cancel-link" onclick="closePerfLog()">Tutup</div>
     </div>
@@ -1433,6 +1449,23 @@ function renderTabs(){
   document.getElementById('tabs').innerHTML = tabs.map(t => `<button class="tab ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
 }
 
+// ================= Rating bintang driver =================
+// Butuh minimal 3 pesanan selesai supaya rating dianggap valid (bukan kebetulan).
+function getDriverRating(avgRespMin, avgAntarMin, count){
+  if(count < 3) return { stars: 0, label: 'Belum cukup data' };
+  const resp = avgRespMin ?? 999;
+  if(resp <= 10 && avgAntarMin <= 20) return { stars: 5, label: 'Sangat Cepat' };
+  if(resp <= 20 && avgAntarMin <= 35) return { stars: 4, label: 'Cepat' };
+  if(resp <= 35 && avgAntarMin <= 50) return { stars: 3, label: 'Standar' };
+  if(resp <= 50 && avgAntarMin <= 70) return { stars: 2, label: 'Lambat' };
+  return { stars: 1, label: 'Perlu Perbaikan' };
+}
+function starsHtml(n){
+  let out = '';
+  for(let i=1;i<=5;i++) out += i<=n ? '⭐' : '<span style="opacity:.22;">⭐</span>';
+  return out;
+}
+
 function renderDriverPerf(){
   const wrap = document.getElementById('driverPerfWrap');
   if(!wrap) return;
@@ -1449,22 +1482,30 @@ function renderDriverPerf(){
     if(o.responseMenit!=null){ byDriver[key].totalResp += o.responseMenit; byDriver[key].respCount++; }
   });
   const rows = Object.values(byDriver)
-    .map(d => ({ ...d, avg: Math.round(d.total/d.count), avgResp: d.respCount ? Math.round(d.totalResp/d.respCount) : null }))
-    .sort((a,b) => (a.avgResp ?? a.avg) - (b.avgResp ?? b.avg))
+    .map(d => {
+      const avg = Math.round(d.total/d.count);
+      const avgResp = d.respCount ? Math.round(d.totalResp/d.respCount) : null;
+      return { ...d, avg, avgResp, rating: getDriverRating(avgResp, avg, d.count) };
+    })
+    .sort((a,b) => b.rating.stars - a.rating.stars || (a.avgResp ?? a.avg) - (b.avgResp ?? b.avg))
     .slice(0, 6);
 
   wrap.innerHTML = `<div class="perf-card">
-    <div class="perf-title">📊 Performa Waktu Driver — Respon & Antar <span class="perf-lock">🔒 khusus Owner</span></div>
+    <div class="perf-title">📊 Performa & Rating Driver <span class="perf-lock">🔒 khusus Owner</span></div>
     ${rows.map((d,i) => `
       <div class="perf-row">
         <div class="perf-rank">${i+1}</div>
-        <div class="perf-name">🛵 ${escapeHtml(d.nama)}<div class="perf-sub">${d.count} pesanan selesai · rata-rata antar ${formatElapsed(d.avg*60000)}</div></div>
+        <div class="perf-name">🛵 ${escapeHtml(d.nama)}
+          <div class="perf-stars">${starsHtml(d.rating.stars)} <span class="perf-rating-label">${d.rating.label}</span></div>
+          <div class="perf-sub">${d.count} pesanan selesai · rata-rata antar ${formatElapsed(d.avg*60000)}</div>
+        </div>
         <div class="perf-stat"><div class="n">${d.avgResp!=null ? formatElapsed(d.avgResp*60000) : '—'}</div><div class="s">respon</div></div>
       </div>`).join('')}
-    <div class="store-manage-link" onclick="openPerfLog()">📋 Lihat log lengkap tiap transaksi</div>
+    <div class="store-manage-link" onclick="openPerfLog()">📋 Lihat log lengkap tiap transaksi (untuk audit)</div>
   </div>`;
 }
 // ================= Driver performance log (Owner only) =================
+let perfLogDate = '';
 function openPerfLog(){
   if(session.role !== 'owner') return;
   const sel = document.getElementById('perfLogFilter');
@@ -1475,21 +1516,74 @@ function openPerfLog(){
     return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
   }).sort((a,b)=>a.localeCompare(b));
   sel.innerHTML = `<option value="">Semua driver</option>` + options.join('');
+  sel.value = '';
+  perfLogDate = '';
+  document.getElementById('perfLogDate').value = '';
   renderPerfLog();
   document.getElementById('perfLogSheetBackdrop').classList.add('open');
 }
 function closePerfLog(){ document.getElementById('perfLogSheetBackdrop').classList.remove('open'); }
 function closeOnPerfLogBackdrop(e){ if(e.target.id === 'perfLogSheetBackdrop') closePerfLog(); }
+function clearPerfLogDate(){ perfLogDate = ''; document.getElementById('perfLogDate').value = ''; renderPerfLog(); }
+function matchesPerfLogDate(o){
+  if(!perfLogDate) return true;
+  const ref = new Date(o.ts);
+  const y = ref.getFullYear(), m = String(ref.getMonth()+1).padStart(2,'0'), d = String(ref.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}` === perfLogDate;
+}
 
 function renderPerfLog(){
   if(session.role !== 'owner') return;
+  perfLogDate = document.getElementById('perfLogDate').value;
   const filterDriverId = document.getElementById('perfLogFilter').value;
-  let rows = store.orders.filter(o => o.driverId && (o.status==='selesai' || o.status==='diproses' || o.status==='ditugaskan'));
+
+  let rows = store.orders.filter(o => o.driverId).filter(matchesPerfLogDate);
   if(filterDriverId) rows = rows.filter(o => o.driverId === filterDriverId);
   rows = rows.sort((a,b) => b.ts - a.ts);
 
+  // ---- Ringkasan audit ----
+  const summaryEl = document.getElementById('perfLogSummary');
+  if(filterDriverId && rows.length){
+    const d = drivers.find(x=>x.id===filterDriverId);
+    const namaTampil = d ? d.nama : (rows[0].driverNama || '-');
+    const selesai = rows.filter(o=>o.status==='selesai');
+    const batal = rows.filter(o=>o.status==='batal');
+    const totalNominal = selesai.reduce((s,o)=>s+(o.nominalAktual ?? o.nominal),0);
+    const respList = selesai.filter(o=>o.responseMenit!=null).map(o=>o.responseMenit);
+    const antarList = selesai.filter(o=>o.durasiMenit!=null).map(o=>o.durasiMenit);
+    const avgResp = respList.length ? Math.round(respList.reduce((a,b)=>a+b,0)/respList.length) : null;
+    const avgAntar = antarList.length ? Math.round(antarList.reduce((a,b)=>a+b,0)/antarList.length) : 0;
+    const rating = getDriverRating(avgResp, avgAntar, selesai.length);
+    summaryEl.innerHTML = `
+      <div class="audit-summary">
+        <div class="audit-summary-title"><span>📊 Ringkasan — ${escapeHtml(namaTampil)}</span></div>
+        <div class="audit-summary-grid">
+          <div class="audit-stat"><div class="al">Total Transaksi</div><div class="av">${rows.length}</div></div>
+          <div class="audit-stat"><div class="al">Selesai / Batal</div><div class="av">${selesai.length} / ${batal.length}</div></div>
+          <div class="audit-stat"><div class="al">Total Nominal Ditangani</div><div class="av">${fmtRp(totalNominal)}</div></div>
+          <div class="audit-stat"><div class="al">Rata² Respon / Antar</div><div class="av">${avgResp!=null?formatElapsed(avgResp*60000):'—'} / ${formatElapsed(avgAntar*60000)}</div></div>
+        </div>
+        <div class="audit-stars">${starsHtml(rating.stars)} <span style="font-size:11px;opacity:.8;">${rating.label}</span></div>
+      </div>`;
+  } else if(rows.length){
+    const selesai = rows.filter(o=>o.status==='selesai');
+    const totalNominal = selesai.reduce((s,o)=>s+(o.nominalAktual ?? o.nominal),0);
+    summaryEl.innerHTML = `
+      <div class="audit-summary">
+        <div class="audit-summary-title"><span>📊 Ringkasan Semua Driver</span></div>
+        <div class="audit-summary-grid">
+          <div class="audit-stat"><div class="al">Total Transaksi</div><div class="av">${rows.length}</div></div>
+          <div class="audit-stat"><div class="al">Selesai</div><div class="av">${selesai.length}</div></div>
+          <div class="audit-stat" style="grid-column:1/-1;"><div class="al">Total Nominal Ditangani</div><div class="av">${fmtRp(totalNominal)}</div></div>
+        </div>
+      </div>`;
+  } else {
+    summaryEl.innerHTML = '';
+  }
+
+  // ---- Daftar transaksi ----
   const wrap = document.getElementById('perfLogList');
-  if(!rows.length){ wrap.innerHTML = `<div class="store-empty">Belum ada transaksi tercatat untuk driver ini.</div>`; return; }
+  if(!rows.length){ wrap.innerHTML = `<div class="store-empty">Belum ada transaksi tercatat untuk filter ini.</div>`; return; }
 
   wrap.innerHTML = rows.map(o => {
     const d = new Date(o.ts);
@@ -1506,17 +1600,20 @@ function renderPerfLog(){
     } else if(o.status==='ditugaskan'){
       const startRef = o.tsAssigned || o.ts;
       metrics = `<div class="log-metric">⏱ Menunggu <b>${formatElapsed(Date.now()-startRef)}</b></div>`;
+    } else if(o.status==='batal'){
+      metrics = `<div class="log-metric" style="background:var(--red-soft);color:var(--red);">✕ Dibatalkan</div>`;
     }
     return `
       <div class="log-row">
         <div class="log-row-top">
           <div>
-            <div class="lt">🛵 ${escapeHtml(o.driverNama||'-')} · ${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}</div>
+            <div class="lt">🛵 ${escapeHtml(o.driverNama||'-')} · ${o.jenis==='antar'?'💰 Setor Tunai Toko':'🏧 Tarik Tunai Toko'}${o.splitTotal?` (trip ${o.splitIndex}/${o.splitTotal})`:''}</div>
             <div class="lsub">${escapeHtml(o.tujuan)} · ${fmtRp(o.nominal)}${o.dibuatOleh ? ' · oleh '+escapeHtml(o.dibuatOleh) : ''}</div>
           </div>
           <div class="ltime">${timeStr}</div>
         </div>
         <div class="log-metrics">${metrics}</div>
+        ${o.status==='batal' && o.cancelReason ? `<div class="order-note" style="margin-top:8px;">Alasan: "${escapeHtml(o.cancelReason)}" — oleh ${escapeHtml(o.canceledBy||'-')}</div>` : ''}
       </div>`;
   }).join('');
 }
@@ -1589,6 +1686,14 @@ function render(){
       const respTxt = o.responseMenit!=null ? `Respon ${formatElapsed(o.responseMenit*60000)} · ` : '';
       timerBadge = `<span class="badge durasi">✓ ${respTxt}Antar ${formatElapsed(o.durasiMenit*60000)}</span>`;
     }
+    let etaBadge = '';
+    if(session.role !== 'driver' && o.status==='diproses' && o.driverId && o.tujuanLat){
+      const loc = locations[o.driverId];
+      if(loc){
+        const km = haversineKm(loc.lat, loc.lng, o.tujuanLat, o.tujuanLng);
+        etaBadge = `<span class="badge eta-badge">🕒 Estimasi tiba ${etaMinutes(km)} menit</span>`;
+      }
+    }
     return `
       <div class="order ${o.jenis}">
         <div class="order-top">
@@ -1606,6 +1711,7 @@ function render(){
         <div class="order-badges">
           ${statusBadge(o.status)}
           ${timerBadge}
+          ${etaBadge}
           ${o.driverId ? `<span class="badge driver">🛵 ${escapeHtml(o.driverNama||'-')}</span>` : ''}
           ${o.dibuatOleh ? `<span class="badge driver">oleh ${escapeHtml(o.dibuatOleh)}</span>` : ''}
         </div>
