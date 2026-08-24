@@ -33,13 +33,14 @@ self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim(
 // menampilkan notifikasi otomatis SENDIRI di luar kendali kita, jadinya dobel.
 messaging.onBackgroundMessage((payload) => {
   const d = payload.data || {};
+  const isChat = d.type === 'chat';
   const title = d.title || '📦 Pesanan Baru Masuk!';
   const options = {
     body: d.body || '',
     tag: d.orderId ? 'cashgo-order-' + d.orderId : 'cashgo-order',
     renotify: true,
-    requireInteraction: true,
-    vibrate: [250, 100, 250, 100, 250],
+    requireInteraction: !isChat, // pesanan baru harus disadari, chat cukup notifikasi biasa
+    vibrate: isChat ? [120] : [250, 100, 250, 100, 250],
     data: { link: (payload.fcmOptions && payload.fcmOptions.link) || './' }
   };
   self.registration.showNotification(title, options);
