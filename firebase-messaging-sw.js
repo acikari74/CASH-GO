@@ -1,6 +1,7 @@
 // firebase-messaging-sw.js
 // Wajib ada persis di root situs (sejajar dengan index.html), namanya harus persis ini.
-// File ini yang menampilkan notifikasi saat aplikasi TERTUTUP atau HP terkunci.
+// File ini menangani DUA hal: (1) push notification saat app tertutup/HP terkunci,
+// (2) cache app-shell supaya app tetap bisa dibuka walau internet mati total.
 
 importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js');
@@ -19,12 +20,48 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// skipWaiting + clients.claim(): begitu ada versi service worker baru ter-deploy,
-// LANGSUNG aktif dan ambil alih kontrol tanpa perlu semua tab ditutup dulu.
-// Ini mencegah HP "nyangkut" pakai versi service worker lama yang mungkin ada bug.
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+// ================= Cache app-shell untuk offline =================
+// Naikkan angka versi ini (v2, v3, dst) tiap kali index.html berubah signifikan,
+// supaya cache lama dibuang dan tidak ada yang "nyangkut" pakai versi basi.
+const CACHE_NAME = 'cashgo-shell-v1';
+const PRECACHE_URLS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)).catch(() => {})
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))),
+    ])
+  );
+});
+
+// Strategi "network-first, fallback ke cache": selalu coba ambil versi terbaru
+// dari internet dulu (karena app ini sering berubah), TAPI kalau gagal/offline,
+// langsung pakai salinan terakhir yang tersimpan di HP — jadi app tetap bisa
+// dibuka walau tidak ada sinyal sama sekali (meski datanya mungkin bukan yang
+// paling baru sampai koneksi kembali).
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('firestore.googleapis.com')) return; // biarkan Firestore SDK urus sendiri
+  event.respondWith(
+    fetch(event.request)
+      .then((res) => {
+        const resClone = res.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html')))
+  );
+});
+
+// ================= Push notification =================
 // Saat pesan FCM masuk ketika app/tab TIDAK sedang dibuka aktif,
 // browser otomatis memanggil ini dan menampilkan notifikasi sistem.
 // PENTING: kita HANYA baca dari payload.data (bukan payload.notification).
