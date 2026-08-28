@@ -344,6 +344,7 @@
   .battery-step-item:last-child{border-bottom:none;}
   .battery-step-num{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--green-soft);color:var(--green-deep);font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
   .battery-brand-tag{display:inline-block;background:var(--amber-soft);color:#B45309;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:20px;margin-bottom:10px;}
+  .battery-why-note{background:var(--red-soft);color:var(--red);font-size:11.5px;font-weight:600;padding:10px 13px;border-radius:10px;margin-bottom:14px;line-height:1.5;}
   .battery-done-btn{width:100%;padding:14px;border:none;border-radius:12px;background:var(--dark);color:#fff;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px;}
   .battery-skip{font-size:12px;color:var(--ink-faint);text-decoration:underline;cursor:pointer;}
 </style>
@@ -410,6 +411,10 @@
     </div>
     <div class="manage-bar hidden" id="batteryGuideLinkWrap" onclick="renderBatterySteps(); document.getElementById('batteryModal').classList.add('open');">
       <div><div class="lbl">🔋 Panduan Notifikasi Selalu Aktif</div><div class="sub">Buka lagi kalau perlu setting ulang</div></div>
+      <div class="chev">›</div>
+    </div>
+    <div class="manage-bar hidden" id="cleanupBarWrap" onclick="cleanupTinyOrders()">
+      <div><div class="lbl">🧹 Bersihkan Data Sampah</div><div class="sub">Hapus pesanan nominal tidak wajar (bug/testing)</div></div>
       <div class="chev">›</div>
     </div>
 
@@ -876,34 +881,43 @@ function getBatterySteps(brand){
   const common = [
     'Buka app <b>Settings/Pengaturan</b> HP (kalau tidak otomatis terbuka, cari sendiri di menu HP).',
   ];
+  const lockRecentApps = 'Buka <b>Recent Apps</b> (tombol kotak/garis di navigasi HP), tekan-tahan (long-press) kartu app CashGo, cari ikon <b>gembok 🔒</b>, tap untuk mengunci — ini mencegah HP "membersihkan" CashGo saat kamu bersihkan app lain.';
   const byBrand = {
     xiaomi: [
       ...common,
-      'Masuk ke <b>Apps</b> → cari <b>Chrome</b> (atau "CashGo" kalau sudah ke-instal sebagai app terpisah).',
-      'Tap <b>Battery saver</b> → pilih <b>No restrictions</b>.',
-      'Kembali, tap <b>Autostart</b> pada app yang sama → aktifkan toggle-nya.',
+      'Masuk ke <b>Apps</b> → cari <b>CashGo</b> → <b>Battery saver</b> → pilih <b>No restrictions</b>.',
+      'Kembali, tap <b>Autostart</b> pada CashGo → aktifkan toggle-nya.',
+      'Cari juga menu <b>Battery & performance → App battery saver</b>, pastikan CashGo tidak masuk daftar dibatasi.',
+      lockRecentApps,
     ],
     oppo: [
       ...common,
-      'Masuk ke <b>Battery</b> → <b>App Battery Management</b> → cari Chrome/CashGo.',
-      'Ubah jadi <b>Allow background activity</b> / matikan "Optimasi baterai" untuk app ini.',
-      'Cek juga <b>App startup manager / Autostart</b>, aktifkan untuk app ini.',
+      'Masuk ke <b>Battery</b> → <b>App Battery Management</b> → cari CashGo.',
+      'Ubah jadi <b>Allow background activity</b> / matikan "Optimasi baterai" untuk CashGo.',
+      'Cek juga <b>App startup manager / Autostart</b>, aktifkan untuk CashGo (jangan biarkan "Manage manually" mati semua toggle).',
+      lockRecentApps,
     ],
     vivo: [
       ...common,
       'Masuk ke <b>Battery</b> → <b>Background power consumption management</b> / <b>High background power consumption</b>.',
-      'Cari Chrome/CashGo, izinkan <b>Allow</b> jalan di background.',
-      'Cek juga <b>i Manager → App manager → Autostart</b>, aktifkan untuk app ini.',
+      'Cari CashGo, izinkan <b>Allow</b> jalan di background.',
+      'Cek juga <b>i Manager → App manager → Autostart</b>, aktifkan untuk CashGo.',
+      lockRecentApps,
     ],
     samsung: [
       ...common,
-      'Masuk ke <b>Apps</b> → cari Chrome/CashGo → <b>Battery</b>.',
-      'Ubah jadi <b>Unrestricted</b> (bukan "Optimized" atau "Restricted").',
+      'Masuk ke <b>Apps</b> → cari <b>CashGo</b> → <b>Battery</b> → ubah jadi <b>Unrestricted</b> (bukan "Optimized"/"Restricted").',
+      'Balik ke Settings utama → <b>Battery and device care</b> → <b>Battery</b> → <b>Background usage limits</b>.',
+      'Buka daftar <b>Never sleeping apps</b> → tap tombol <b>+</b> → tambahkan CashGo ke daftar ini (kalau CashGo ada di "Sleeping apps"/"Deep sleeping apps", pindahkan ke sini).',
+      'Masih di menu Battery, cari <b>Adaptive battery</b> / <b>More battery settings</b> → <b>matikan (off)</b> sepenuhnya — fitur ini suka "menebak" dan mematikan app tanpa izin.',
+      lockRecentApps,
     ],
     'android-lain': [
       ...common,
-      'Masuk ke <b>Apps</b> → cari Chrome (atau "CashGo") → <b>Battery</b>.',
+      'Masuk ke <b>Apps</b> → cari <b>CashGo</b> → <b>Battery</b>.',
       'Ubah jadi <b>Unrestricted / No restrictions / Don\'t optimize</b>.',
+      'Cari juga menu semacam "Autostart"/"Background activity"/"Protected apps" di Settings HP kamu, aktifkan untuk CashGo kalau ada.',
+      lockRecentApps,
     ],
     lainnya: [
       'Fitur ini khusus untuk HP Android. Kalau kamu pakai iPhone, tidak perlu setting tambahan apa pun — cukup pastikan notifikasi diizinkan saat diminta.',
@@ -919,6 +933,7 @@ function renderBatterySteps(){
   document.getElementById('batteryOpenBtn').classList.toggle('hidden', brand === 'lainnya');
   document.getElementById('batterySteps').innerHTML = `
     <div class="battery-brand-tag">Terdeteksi: ${brandLabel}</div>
+    ${brand !== 'lainnya' ? '<div class="battery-why-note">⚠️ Kenapa ini WAJIB: tanpa semua langkah di bawah, HP bisa mematikan pelacakan lokasi CashGo begitu kamu tutup app-nya — Owner jadi tidak bisa lihat posisi kamu lagi.</div>' : ''}
     ${steps.map((s,i) => `<div class="battery-step-item"><div class="battery-step-num">${i+1}</div><div>${s}</div></div>`).join('')}
   `;
 }
@@ -1171,6 +1186,7 @@ function enterApp(){
   document.getElementById('manageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('driverManageBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('batteryGuideLinkWrap').classList.toggle('hidden', session.role!=='driver');
+  document.getElementById('cleanupBarWrap').classList.toggle('hidden', session.role!=='owner');
   document.getElementById('mapCardWrap').classList.toggle('hidden', session.role==='driver');
   activeTab = session.role==='driver' ? 'punya-saya' : 'semua';
 
@@ -1362,6 +1378,11 @@ function renderDriverManagerList(){
 async function updateDriverLimit(driverId, field, rawValue){
   const d = drivers.find(x=>x.id===driverId); if(!d) return;
   const val = parseInt(String(rawValue).replace(/\D/g,'')) || null;
+  if(val !== null && val < 10000){
+    showToast('⚠️ Limit terlalu kecil (minimal Rp 10.000) — kemungkinan salah ketik. Tidak disimpan.');
+    renderDriverManagerList(); // kembalikan tampilan ke nilai lama (batalkan input yang salah)
+    return;
+  }
   d[field] = val;
   await persistDrivers();
   showToast('Limit driver diperbarui');
@@ -1375,6 +1396,10 @@ async function addDriver(){
   const limitTarik = parseInt(document.getElementById('inpDriverLimitTarik').value.replace(/\D/g,'')) || null;
   if(!nama || !user || !pass){ showToast('Isi nama, username, dan password dulu'); return; }
   if(drivers.some(d=>d.username.toLowerCase()===user.toLowerCase())){ showToast('Username sudah dipakai driver lain'); return; }
+  if((limitSetor !== null && limitSetor < 10000) || (limitTarik !== null && limitTarik < 10000)){
+    showToast('⚠️ Limit terlalu kecil (minimal Rp 10.000) — kemungkinan salah ketik. Perbaiki dulu.');
+    return;
+  }
   const d = { id:'drv'+Date.now()+Math.random().toString(36).slice(2,6), nama, hp, username:user, password:pass, limitSetor, limitTarik };
   drivers.push(d);
   await persistDrivers();
@@ -1457,6 +1482,22 @@ function setJenis(jenis){
   }
 }
 
+async function cleanupTinyOrders(){
+  if(session.role !== 'owner') return;
+  const THRESHOLD = 1000; // di bawah Rp 1.000 hampir pasti bug/testing, bukan transaksi asli
+  const badOrders = store.orders.filter(o => o.nominal < THRESHOLD);
+  if(!badOrders.length){ showToast('Tidak ada data sampah ditemukan (semua nominal terlihat wajar).'); return; }
+
+  const totalCount = badOrders.length;
+  const confirmed = confirm(`Ditemukan ${totalCount} pesanan dengan nominal di bawah Rp 1.000 (kemungkinan besar data bug/testing, seperti "Setor Rp 2" dsb).\n\nHapus semuanya? Tindakan ini TIDAK BISA dibatalkan.`);
+  if(!confirmed) return;
+
+  store.orders = store.orders.filter(o => o.nominal >= THRESHOLD);
+  await persistOrders();
+  render(); renderFleetMap();
+  showToast(`✓ ${totalCount} data sampah berhasil dihapus.`);
+}
+
 async function saveOrder(){
   const nominal = parseInt(document.getElementById('inpNominal').value.replace(/\D/g,'')) || 0;
   const catatan = document.getElementById('inpNote').value.trim();
@@ -1479,8 +1520,14 @@ async function saveOrder(){
 
   // Pecah otomatis jadi beberapa trip kalau nominal melebihi limit driver —
   // supaya driver tidak pernah bawa uang lebih dari limit yang ditentukan Owner sekaligus.
+  const MAX_SPLIT_PARTS = 20; // pagar pengaman: kalau lebih dari ini, kemungkinan besar limit driver salah setting (misal ke-isi angka kekecilan)
   let parts = [nominal];
   if(autoDriverId && driverLimit && nominal > driverLimit){
+    const estimatedParts = Math.ceil(nominal / driverLimit);
+    if(estimatedParts > MAX_SPLIT_PARTS){
+      showToast(`⚠️ Limit ${autoDriverNama} (${fmtRp(driverLimit)}) kelihatan terlalu kecil dibanding nominal ${fmtRp(nominal)} — akan jadi ${estimatedParts} pesanan. Cek ulang limit driver di Kelola Akun Driver sebelum lanjut.`);
+      return;
+    }
     parts = [];
     let remaining = nominal;
     while(remaining > driverLimit){ parts.push(driverLimit); remaining -= driverLimit; }
